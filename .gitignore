@@ -1,0 +1,6 @@
+﻿data/
+results/
+env/
+*.pt
+*.safetensors
+__pycache__/
