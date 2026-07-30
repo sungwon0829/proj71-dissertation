@@ -1,0 +1,93 @@
+# Project 71 — PINNED evaluation-generation config.
+#
+# Feeds: every ASR / over-refusal / helpfulness number in Table 1 and every per-category
+# ASR number in Table 2. This file is the decoding contract for ALL arms (B0, B1, B2, B3, T).
+#
+# ---------------------------------------------------------------------------------------
+# PIN STATUS: PROPOSED 2026-07-30 by the eval-harness agent. Must be reviewed and declared
+# FINAL in the lab notebook before B2/T evaluation runs. AFTER THAT DATE, DO NOT EDIT THIS
+# FILE. If a value must change, every arm must be regenerated from scratch with the new
+# config and the change recorded in notebook/lab_notebook.md.
+# ---------------------------------------------------------------------------------------
+#
+# IDENTICAL TREATMENT: the same suite, the same system prompt, the same chat template and
+# the same decoding settings are used for B0, B1, B2, B3 and T. Any asymmetry between arms
+# invalidates the comparison. eval_generate.py copies this whole block into every output
+# file so the settings live with the data, not only in the repo.
+
+model:
+  name_or_path: Qwen/Qwen2.5-7B-Instruct
+  # cache_dir is used directly as the hub-format cache ROOT (models--org--name/... sits
+  # underneath it). It does NOT auto-append "hub/" the way HF_HOME does.
+  cache_dir: D:/hf_cache/hub
+  # Pinned snapshot of the base model actually on disk. eval_generate.py asserts the
+  # resolved snapshot matches this; a silent model swap would invalidate every number.
+  revision: a09a35458c702b33eeacc393d103063234e8bc28
+  dtype: bfloat16
+  attn_implementation: sdpa   # never flash-attn on Blackwell (CLAUDE.md)
+  trust_remote_code: false
+
+prompting:
+  system_prompt_file: configs/system_prompt.txt
+  # Byte-identical in rendered output to the stock Qwen2.5 template (verified empirically
+  # for single-turn, many-shot and prefill cases). Using the same template as SFT training
+  # removes train/eval rendering skew as a confound.
+  chat_template_path: configs/qwen25_chat_template_generation.jinja
+  # Red-team items carry NO system message; the harness prepends the pinned one above.
+  # prefilling items END in a partial assistant turn and are rendered with
+  # continue_final_message=True (verified against transformers 5.14.1) so the model
+  # CONTINUES that turn instead of starting a new one.
+
+decoding:
+  # GREEDY. do_sample=false is deliberate: the headline claim is a PAIRED comparison over a
+  # fixed prompt set, and the reported uncertainty comes from (a) bootstrap over prompts and
+  # (b) 3 training seeds. Adding decoding noise would inflate variance without adding
+  # information about the treatment. Greedy also makes every number exactly reproducible.
+  do_sample: false
+  num_beams: 1
+  # Qwen2.5-7B-Instruct ships generation_config.json with do_sample=true, temperature=0.7,
+  # top_p=0.8, top_k=20, repetition_penalty=1.05. Those defaults apply SILENTLY unless
+  # overridden. eval_generate.py overwrites the model's GenerationConfig with exactly the
+  # values below and records the effective config in the output file.
+  temperature: null           # not applicable under greedy decoding
+  top_p: null                 # not applicable under greedy decoding
+  top_k: null                 # not applicable under greedy decoding
+  # 1.05 = Qwen2.5-7B-Instruct's own shipped generation_config.json default.
+  #
+  # CHANGED 2026-07-31 from 1.0 (pure greedy) after measuring a decoding pathology. With
+  # repetition_penalty=1.0, the B1 SFT checkpoint degenerates into sentence-level loops on
+  # 44/300 real-suite items (38 of them repeating one sentence >=5 times, worst case 64
+  # repeats); B0 showed 1/300. Re-running the six worst items at 1.05 reduced every one of
+  # them to zero repeated sentences (and at 1.1 likewise), so the loops are caused by the
+  # penalty setting, not by the checkpoint alone. Left at 1.0 this would corrupt the
+  # helpfulness and over-refusal metrics for whichever arms happen to loop, which is an
+  # arm-dependent artefact rather than a property of the treatment.
+  #
+  # NOTE: the B0/B1 real-suite runs currently in results/ were generated at 1.0 and are
+  # therefore SUPERSEDED — they must be regenerated before any of their numbers are used.
+  # This value is still PROVISIONAL; the main thread owns the pin decision.
+  repetition_penalty: 1.05
+  max_new_tokens: 512
+  min_new_tokens: 0
+  eos_token_ids: [151645, 151643]   # <|im_end|>, <|endoftext|>
+  pad_token_id: 151643              # <|endoftext|> — distinct from eos, so padding is unambiguous
+
+batching:
+  batch_size: 8
+  # Decoder-only models MUST be left-padded for batched generation; right padding puts pad
+  # tokens between the prompt and the first generated token and silently corrupts outputs.
+  padding_side: left
+  # Items are sorted by token length into batches to reduce padding waste. Sorting cannot
+  # change greedy outputs (each sequence is independent given correct left padding +
+  # attention mask); eval_generate.py --verify_batching proves this empirically by comparing
+  # batched output against batch-size-1 output for the same prompts.
+  length_sorted_batching: true
+
+output:
+  # results/<arm>_seed<seed>/generations.jsonl
+  dir_template: "results/{arm}_seed{seed}"
+  filename: generations.jsonl
+  # RAW GENERATIONS ARE NEVER OVERWRITTEN. If the target file exists, eval_generate.py
+  # refuses to run unless --allow_new_version is passed, in which case it writes
+  # generations.v2.jsonl, generations.v3.jsonl, ... and never touches the earlier files.
+  never_overwrite: true

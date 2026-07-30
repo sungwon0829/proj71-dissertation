@@ -1,0 +1,80 @@
+# Project 71 — B1 SFT config (LoRA on Qwen2.5-7B-Instruct)
+#
+# THIS LORA ADAPTER CONFIG (r/alpha/dropout/target_modules) IS THE FIXED TEMPLATE
+# FOR ALL ARMS: B1 (this run), B2 (B1 + DPO helpfulness), T (B1 + DPO helpfulness+safety).
+# If any adapter hyperparameter below must change, it must change identically for
+# B2 and T, and the change must be stated explicitly in the lab notebook.
+#
+# Fully reproducible from this file + `--seed`. No hyperparameter is hardcoded
+# in scripts/train_sft.py.
+
+model:
+  name_or_path: Qwen/Qwen2.5-7B-Instruct
+  # NOTE: `cache_dir` passed to from_pretrained() is used directly as the hub-format cache
+  # root (models--org--name/... underneath it) -- it does NOT auto-append "hub/" the way the
+  # HF_HOME env var does. The actual cached snapshot lives at D:\hf_cache\hub\models--Qwen--...,
+  # so cache_dir must point at D:/hf_cache/hub, not D:/hf_cache. Verified empirically.
+  cache_dir: D:/hf_cache/hub
+  dtype: bfloat16
+  attn_implementation: sdpa   # never flash-attn on Blackwell (unsettled per CLAUDE.md)
+  trust_remote_code: false
+
+data:
+  train_file: data/processed/sft_train.jsonl
+  # Stock Qwen2.5 chat template has NO {% generation %} markers (verified empirically:
+  # apply_chat_template(..., return_assistant_tokens_mask=True) silently returns an
+  # all-zero mask). This is a hand-verified drop-in replacement that renders BYTE-IDENTICAL
+  # text to the stock template but wraps assistant content + <|im_end|> + trailing "\n"
+  # in {% generation %}...{% endgeneration %} so TRL's assistant_only_loss masking is real.
+  chat_template_path: configs/qwen25_chat_template_generation.jinja
+
+lora:
+  r: 32
+  alpha: 64
+  dropout: 0.05
+  target_modules: [q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj]
+  bias: none
+  task_type: CAUSAL_LM
+
+training:
+  output_dir_template: "results/B1_sft_seed{seed}"
+  max_seq_length: 4096
+  num_train_epochs: 3
+  # REVISED after OOM at step 136/435 in the first full-run attempt (2026-07-30):
+  # torch.OutOfMemoryError inside the MLP forward with LoRA. The smoke check (20 steps)
+  # only sampled short-ish batches; the crash happened once the deterministic (unshuffled,
+  # shuffle_dataset=False) example order reached a batch of long ESConv conversations near
+  # 2.6k tokens x 4 concurrent sequences. Fix: halve per-device batch, double grad accum to
+  # hold effective batch at 16 (unchanged paper-facing hyperparameter), and enable gradient
+  # checkpointing to cut activation memory. See notebook/lab_notebook.md for the full incident.
+  per_device_train_batch_size: 2
+  gradient_accumulation_steps: 8   # effective batch = 2 x 8 = 16 (unchanged from original config)
+  learning_rate: 1.0e-4
+  lr_scheduler_type: cosine
+  warmup_ratio: 0.03
+  optim: adamw_torch              # plain torch AdamW — no bitsandbytes on native Windows
+  weight_decay: 0.0
+  max_grad_norm: 1.0
+  seed: 42
+  bf16: true
+  gradient_checkpointing: true    # enabled post-OOM; composes with PEFT/LoRA via TRL's
+                                   # automatic enable_input_require_grads() (verified in
+                                   # installed trl==1.9.0 source before relying on it)
+  gradient_checkpointing_kwargs:
+    use_reentrant: false
+  assistant_only_loss: true       # verified empirically against the custom chat template above
+  packing: false                  # zero-truncation policy: one example = one sequence, no packing
+  dataloader_num_workers: 2
+  logging_steps: 5
+  save_strategy: epoch
+  report_to: []                   # avoid any interactive logger prompt (e.g. wandb) on a detached run
+  # Explicit (matches TRL's own default): every epoch is shuffled by a seeded RandomSampler,
+  # independent of the physical row order in sft_train.jsonl. Note: --worst_case_smoke in
+  # train_sft.py temporarily overrides this to "sequential" for smoke checks only, to force
+  # worst-case-length batches early; the real run always uses this yaml value ("random").
+  train_sampling_strategy: random
+
+# Launch-time environment (not a script hyperparameter, but recorded here for
+# reproducibility per the OOM fix): set PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+# in the shell that launches scripts/train_sft.py, to reduce allocator fragmentation on
+# long, variable-length sequences. See the launch command in lab_notebook.md.
