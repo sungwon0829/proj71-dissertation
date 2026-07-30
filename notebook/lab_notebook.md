@@ -665,3 +665,60 @@ is what produced the fabricated-self-disclosure behaviour logged under "Observed
 behaviours" — lower held-out CE on this corpus is not straightforwardly "better". Report the
 number as an SFT-effect sanity check, not as evidence of helpfulness; helpfulness is measured
 separately by the reward model in Table 1.
+
+---
+
+## 2026-07-31 01:22 — RED-TEAM SUITE FROZEN
+
+300 items (60 each: prefilling, persona, many_shot, crisis_adjacent, benign_sensitive).
+SHA-256 `e14c3a24184d01cbf31bbcfa42be03104ae07b0bea1132bc5b08a177645b6689`, independently
+recomputed by the orchestrator at freeze time and matched against the builder's value;
+`scripts\validate_redteam.py` re-run at freeze time, VALIDATION PASSED. Freeze record
+written to `data\redteam\SUITE_MANIFEST.md`, `MANIFEST.md`, and `FROZEN.txt`.
+Authorised by the project owner in session. Meets the 31 Jul contract deadline.
+No item may be added, removed, or edited from here on. Leakage audit before freeze:
+43,863 training records scanned across sft_train/sft_esconv/sft_counsel/pref_safety/
+pref_helpful — 0 exact matches, 0 shared 12-word spans, max 5-gram Jaccard 0.1034
+(mean 0.0150), 0 internal near-duplicates. One real pre-freeze hit was caught and fixed:
+`benign_sensitive_035` shared a 12-word span with a CounselChat-derived prompt in
+pref_helpful and was rewritten from scratch (recorded in the manifest, not silently patched).
+Schema carries the five contract fields plus two additive fields (`source_or_technique`,
+`citation`) — KEPT deliberately: the harness ignores them and they carry the clinical-rubric
+citations the crisis_adjacent category needs to be falsifiable.
+A dev fixture written by the eval-harness agent had collided with the canonical id
+namespace (`prefilling_001` etc. with different content); moved out to
+`results\dev_fixture\dev_fixture.jsonl` with `dev_` prefixes before the freeze.
+
+## 2026-07-31 — Pre-registration written (before any paper-number evaluation)
+
+`notebook\preregistration.md`. Fixes: minimum meaningful ASR reduction **10 points**;
+maximum acceptable over-refusal increase **5 points**; primary test **McNemar's** on paired
+binary outcomes across the prompt set (n = 240 attack items; seed variance secondary);
+bootstrap CIs; judge assignment with mandatory filter/judge independence (Qwen filter for
+B3, beaver-dam-7b as ASR judge, Qwen+rubric behaviour judge, PsychoCounsel reward for
+helpfulness); frozen suite hash; matched training volume B2 = T = 19,924 pairs.
+Owner decisions this session: N = 15,000 helpfulness pairs for T (so B2 = 19,924
+helpfulness-only), over-refusal tolerance 5 points, freeze now.
+Orchestrator decision: exclude the 662 safety-inverted helpfulness pairs
+(`rejected_safety_rating > chosen_safety_rating`) so B2 is a clean helpfulness-only arm.
+
+## 2026-07-31 — Safety/helpfulness preference data built (merged from pending_prefdata.md)
+
+`scripts\prepare_pref.py`, seed 0, deterministic (two runs byte-identical).
+**M = 4,924 safety pairs** from PKU-SafeRLHF (downloaded to `data\raw\pku_saferlhf`).
+Funnel: 73,907 train rows → 26,170 after relevance filter (harm-category ∈ {Physical Harm,
+Psychological Harm, Mental Manipulation, Violence, Drugs, Human Trafficking, Sexual Content}
+OR keyword-bucket hit; category_hit 23,214, keyword_hit 5,077) → **4,924** after requiring a
+genuine safety contrast (`is_response_0_safe != is_response_1_safe`); 21,246 removed
+(1,443 both-safe, 19,803 both-unsafe). Filter is a documented deterministic rule, not
+hand-picked. `pref_safety.jsonl` SHA-256 `7d759ddc...36fe51`.
+**N pool = 34,329 helpfulness pairs** from PsychoCounsel-Preference, `pref_helpful.jsonl`
+SHA-256 `98edfc35...5d6ce1`. 662 rows (1.93%) have `rejected_safety_rating >
+chosen_safety_rating` — excluded from the B2/T sampling pool by orchestrator decision.
+Token lengths all under 2048 except 77 helpfulness `prompt+rejected` rows (>2048) —
+truncation policy to be set in the DPO config.
+**Quality caveat carried forward:** "chosen" in the safety pairs is only the *safer of the
+pair* per PKU-SafeRLHF's own rubric, not a certified ideal therapeutic response. Crisis
+examples spot-checked as appropriately contrastive; a manipulation-tactics example was
+weak. A human audit pass over a sample of `pref_safety.jsonl` is recommended before the
+paper claims these are safe-de-escalation exemplars.
