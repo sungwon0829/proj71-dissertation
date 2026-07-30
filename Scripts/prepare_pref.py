@@ -209,7 +209,19 @@ def build_safety_pairs(seed: int, system_prompt: str):
     return pairs, funnel
 
 
-def build_helpful_pairs(seed: int, system_prompt: str):
+def build_helpful_pairs(seed: int, system_prompt: str, exclude_safety_inversions: bool = False):
+    """Build the psychocounsel_pref helpfulness pairs.
+
+    exclude_safety_inversions (default False, preserves the original/existing behaviour and
+    the on-disk data/processed/pref_helpful.jsonl exactly as already produced): when True,
+    drops rows where rejected_safety_rating > chosen_safety_rating (662 of 34,329 rows) --
+    the Methodological Safeguards v2 rule 2 requirement that B2 (helpfulness-only DPO) is a
+    clean arm, not one nudged toward less-safe outputs by rows whose "rejected" response was
+    independently rated *safer* than the "chosen" one. Used by scripts/train_dpo.py, which
+    calls this function directly (in-memory, from the raw dataset) rather than reading a
+    separately-filtered file, so no shared file under data/processed/ is regenerated/
+    overwritten by the DPO track while other tracks may depend on its current bytes.
+    """
     if not RAW_PREF_DIR.exists():
         raise FileNotFoundError(f"Raw psychocounsel_pref data not found at {RAW_PREF_DIR}")
     ds = load_from_disk(str(RAW_PREF_DIR))["train"]
@@ -221,11 +233,16 @@ def build_helpful_pairs(seed: int, system_prompt: str):
 
     pairs = []
     inversion_count = 0
+    excluded_count = 0
     for i, row in enumerate(ds):
         if not row["question"] or not row["chosen"] or not row["rejected"]:
             raise ValueError(f"Row {i}: empty question/chosen/rejected text")
-        if row["rejected_safety_rating"] > row["chosen_safety_rating"]:
+        is_inverted = row["rejected_safety_rating"] > row["chosen_safety_rating"]
+        if is_inverted:
             inversion_count += 1
+        if exclude_safety_inversions and is_inverted:
+            excluded_count += 1
+            continue
         pairs.append(
             {
                 "prompt": [
@@ -237,7 +254,13 @@ def build_helpful_pairs(seed: int, system_prompt: str):
             }
         )
     n_output = len(pairs)
-    if n_output != n_input:
+    expected_output = n_input - excluded_count
+    if n_output != expected_output:
+        raise AssertionError(
+            f"pref_helpful row count changed unexpectedly: input={n_input} "
+            f"excluded={excluded_count} output={n_output} expected={expected_output}"
+        )
+    if not exclude_safety_inversions and n_output != n_input:
         raise AssertionError(
             f"pref_helpful row count changed unexpectedly: input={n_input} output={n_output}"
         )
@@ -250,6 +273,8 @@ def build_helpful_pairs(seed: int, system_prompt: str):
         "n_input_rows": n_input,
         "n_output_rows": n_output,
         "n_rejected_safety_gt_chosen_safety": inversion_count,
+        "exclude_safety_inversions_applied": exclude_safety_inversions,
+        "n_excluded_for_safety_inversion": excluded_count,
     }
     return pairs, funnel
 

@@ -1,0 +1,125 @@
+# Project 71 — B2 config (DPO, helpfulness pairs ONLY, LoRA on top of the B1 checkpoint)
+#
+# Produces: the B2 row in Table 1 (mean +/- 95% CI over 3 seeds), and B3 = B2 + guardrail
+# filter at inference (the baseline Table 1/2 compare T against).
+#
+# THIS LORA ADAPTER CONFIG IS THE FIXED TEMPLATE FROM B1 (r=32/alpha=64/dropout=0.05, all
+# attention + MLP projections) -- byte-identical to configs/sft_lora.yaml's `lora:` block.
+# scripts/train_dpo.py asserts this equality at startup and refuses to run if it drifts.
+# If you ever have a reason to change an adapter hyperparameter, it must change for B1, B2
+# AND T, and the change must be stated explicitly in notebook/lab_notebook.md.
+#
+# MATCHED DATA VOLUME (Methodological Safeguards v2, rule 2): T trains on N helpfulness +
+# M safety pairs; B2 must train on N+M helpfulness-only pairs so total volume and optimiser
+# steps match and a T effect is not confounded with data volume.
+#   N (helpfulness pairs used by T)      = 15,000
+#   M (safety pairs used by T)           = 4,924
+#   B2 total (this config)               = N + M = 19,924  (helpfulness-only)
+# Both counts (and the actual sampled pair ids) are logged at run time to
+# results/B2_dpo_seed<seed>/dpo_data_manifest.json -- never hardcoded here beyond N/M below,
+# which exist so the two configs are self-documenting and so the training script can assert
+# N_b2 == N_t + M_t without needing to read the sibling config file.
+#
+# DO NOT LAUNCH YET -- draft only, per the coordinator's Task 2 instruction. learning_rate,
+# num_train_epochs, beta, loss_type and precompute_ref_log_probs below are proposed defaults
+# (literature-standard LoRA-DPO values), not yet owner-confirmed -- flagged in the lab
+# notebook / report, not silently assumed final.
+
+model:
+  name_or_path: Qwen/Qwen2.5-7B-Instruct
+  cache_dir: D:/hf_cache/hub   # NOTE: cache_dir is the hub-format root, not HF_HOME -- see sft_lora.yaml
+  dtype: bfloat16
+  attn_implementation: sdpa    # never flash-attn on Blackwell (unsettled per CLAUDE.md)
+  trust_remote_code: false
+
+# The B1 checkpoint this arm is built on top of (Gate 1 selection, fixed in advance,
+# recorded in notebook/lab_notebook.md and notebook/preregistration.md -- not revisited here).
+base_adapter:
+  b1_output_dir: results/B1_sft_seed42
+  b1_checkpoint: checkpoint-290
+
+data:
+  # Both files use the TRL 1.9 DPOTrainer conversational schema (see scripts/prepare_pref.py).
+  helpful_pool_source: psychocounsel_pref   # scripts/train_dpo.py calls
+                                             # prepare_pref.build_helpful_pairs(seed, system_prompt,
+                                             # exclude_safety_inversions=True) directly against the raw
+                                             # dataset -- in-memory, not reading data/processed/pref_helpful.jsonl
+                                             # -- so no shared processed file is regenerated/overwritten.
+  safety_pairs_file: data/processed/pref_safety.jsonl   # not used by B2 (helpfulness-only); present for
+                                                          # schema/path parity with dpo_t.yaml.
+  chat_template_path: configs/qwen25_chat_template_generation.jinja
+  system_prompt_file: configs/system_prompt.txt
+
+  # Exclusion policy (owner-confirmed, Methodological Safeguards v2 rule 2):
+  # drop the 662 rows where rejected_safety_rating > chosen_safety_rating from the
+  # helpfulness pool BEFORE sampling, so B2 is a clean helpfulness-only arm rather than one
+  # nudged toward less-safe outputs. Verified count: 34,329 total -> 662 excluded -> 33,667
+  # remain (before the length filter below).
+  exclude_safety_inversions: true
+
+  # Max-length policy (owner-requested: decide and document rather than let the trainer
+  # silently truncate). DPOConfig in TRL 1.9 has a single `max_length` covering the whole
+  # tokenized (prompt+completion) sequence, truncated via `truncation_mode` (default
+  # "keep_start" = keeps the prompt, cuts the TAIL of the completion) if left to the trainer.
+  # For DPO specifically, silently truncating a completion mid-sentence would corrupt the
+  # preference signal being compared (chosen vs rejected), so -- consistent with the
+  # project's zero-truncation policy already enforced for SFT (train_sft.py) -- we EXCLUDE
+  # rather than truncate: any pair where tokenize(prompt+chosen) or tokenize(prompt+rejected)
+  # exceeds max_length is dropped from the pool before sampling, not fed to the trainer to
+  # truncate. max_length below is kept as a redundant safety net in DPOConfig (should never
+  # actually trigger given the pre-filter) and as the exclusion threshold itself.
+  # Verified counts against the psychocounsel_pref pool: 77 of 34,329 rows exceed 2048 tokens
+  # (all in prompt+rejected; prompt+chosen never exceeds it; pref_safety.jsonl has 0 rows
+  # over 2048 in either). Combined with the 662 inversion-exclusion (6 rows are excluded by
+  # both criteria), the final available helpfulness pool is 33,596 rows -- comfortably above
+  # the 19,924 this config samples.
+  max_length_policy: exclude   # exclude | truncate -- "exclude" chosen; do not change without
+                                # re-stating the reasoning above in lab_notebook.md.
+  max_length: 2048
+
+  # MATCHED DATA VOLUME sampling target for this arm (see header comment).
+  n_helpful_sample: 19924
+  n_safety_sample: 0
+
+lora:
+  r: 32
+  alpha: 64
+  dropout: 0.05
+  target_modules: [q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj]
+  bias: none
+  task_type: CAUSAL_LM
+
+training:
+  output_dir_template: "results/B2_dpo_seed{seed}"
+  num_train_epochs: 1        # PROPOSED, not owner-confirmed -- standard for a ~20k-pair DPO run
+  # Same 2x8 + gradient-checkpointing memory profile as B1's post-OOM-fix config
+  # (configs/sft_lora.yaml), not the original 4x4 -- required per Task 2 instruction, since
+  # DPO forward/backward passes are more memory-hungry per step (chosen + rejected + implicit
+  # reference forward, even with the adapter-disable reference-free trick).
+  per_device_train_batch_size: 2
+  gradient_accumulation_steps: 8   # effective batch = 2 x 8 = 16
+  learning_rate: 5.0e-6       # PROPOSED, not owner-confirmed -- literature-standard LoRA-DPO LR
+  lr_scheduler_type: cosine
+  warmup_ratio: 0.03
+  optim: adamw_torch          # plain torch AdamW -- no bitsandbytes on native Windows
+  weight_decay: 0.0
+  max_grad_norm: 1.0
+  beta: 0.1                   # PROPOSED (TRL's own default) -- not owner-confirmed
+  loss_type: sigmoid          # PROPOSED (standard DPO loss) -- not owner-confirmed
+  label_smoothing: 0.0
+  disable_dropout: true       # TRL default; explicit here for auditability
+  precompute_ref_log_probs: true   # PROPOSED perf choice: with peft_config set and ref_model=None,
+                                    # TRL computes the reference log-probs via an adapter-disabled
+                                    # forward pass; precomputing them once up front (rather than every
+                                    # step) roughly halves the forward-pass cost per training step.
+  precompute_ref_batch_size: 8
+  seed: 42
+  bf16: true
+  gradient_checkpointing: true
+  gradient_checkpointing_kwargs:
+    use_reentrant: false
+  dataloader_num_workers: 2
+  logging_steps: 5
+  save_strategy: epoch
+  report_to: []
+  train_sampling_strategy: random   # explicit, matches TRL's own default (see sft_lora.yaml precedent)
