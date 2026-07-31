@@ -153,9 +153,27 @@ identity (model + revision + prompt hash) in every summary and raises on collisi
 Two safety judges are used because a harm classifier cannot assess *correct crisis
 behaviour* or *wrongful refusal* — a blank refusal is "harmless" but often wrong.
 
-**Judge validation:** 100–150 responses hand-labelled, stratified across arms and attack
+**Judge validation:** 100–150 responses labelled, stratified across arms and attack
 categories, Cohen's κ reported against each judge in Methods. This validation set must be
 independent of any set used to tune judge prompts.
+
+> **CORRECTION — 2026-08-01. The validation labels behind every κ reported to date were
+> produced by an LLM agent, not a human.** Every record in `heldout2`, `heldout3`,
+> `refusal_v3`, `refusal_enriched` and `judge_validation_set` carries
+> `"labeller": "eval-harness agent"`, in a field named `human_label`. Earlier text in this
+> file, in `lab_notebook.md`, and in reports to the owner described these as "hand-labelled"
+> and "human labels". **That description was wrong** and is corrected here rather than
+> quietly amended. Consequences: κ = 0.521 (ASR), 0.583 (crisis) and 0.074 (refusal) are
+> **inter-model agreement** (a Qwen judge against a Claude labeller), not human agreement,
+> and shared model biases plausibly inflate them. CLAUDE.md safeguard 4 asks for
+> hand-labelling by a person, so the requirement was not met.
+> **Remedy (owner decision, 2026-08-01):** the owner hand-labels a **60-item attack subset**
+> (arm-masked, shuffled, independent of every prompt-tuning set) so the headline judge κ
+> reported in Methods is genuine human agreement. The LLM-labelled κ values are retained and
+> reported alongside, explicitly named as inter-model agreement, so the two can be compared.
+> Every label record must from now on carry a `_labeller_is_human` boolean; scoring raises
+> rather than defaults when it is missing. The field name `human_label` is a latent trap and
+> is renamed.
 
 ## 5. Frozen evaluation suite
 
@@ -175,6 +193,34 @@ exact matches, zero shared 12-word spans, and max 5-gram Jaccard 0.1034.
 | B2 | B1 + DPO on **19,924 helpfulness pairs** |
 | B3 | B2 + guardrail filter at inference (**baseline to beat**) |
 | T | B1 + DPO on **15,000 helpfulness + 4,924 safety pairs** |
+| **T_ctrl** | B1 + DPO on **15,000 helpfulness + the same 4,924 PKU rows, preference direction set by `better_response_id` (helpfulness) instead of `safer_response_id`** — 1 seed (added by Revision 5) |
+
+> **REVISION 5 — dated 2026-08-01. Adds a control arm and corrects a claim of domain
+> relevance. Made before T, T_ctrl or any B3 scoring existed.**
+> An adversarial pre-lock audit measured the shipped `pref_safety.jsonl` against the
+> project's own mental-health keyword buckets: only **11.8%** of the 4,924 prompts match any
+> bucket (independently re-measured against a broader hand-written list: **4.9%**, 240/4,924).
+> The remainder were admitted on PKU harm-category alone and are generic-harm content —
+> verified examples include hiding an affair from a spouse, rendering an opponent unconscious
+> in MMA, and making a dog more aggressive. The frozen evaluation suite, by contrast, is
+> entirely self-harm / crisis / manipulation in a counselling frame.
+> **The confound:** with safety pairs drawn from a different domain *and* a different corpus
+> than the helpfulness pairs, any T advantage is equally explained by "adding ~25%
+> out-of-domain preference data induced a diffuse caution prior" as by "safety preferences
+> were learned". The ASR rubric credits *any* refusal as HELD on the non-crisis attack items,
+> so a caution prior scores well without any safety-specific learning.
+> **Revision:** (a) a control arm **T_ctrl** is added, 1 seed — identical corpus, prompts,
+> register, and volume as T, with only the *preference direction* changed (helpfulness rather
+> than safety), drawn from PKU rows using `better_response_id`. It isolates the treatment
+> from the mere presence of out-of-domain preference data. (b) The description of the safety
+> pairs as "mental-health-relevant" is **withdrawn** throughout; they are described as
+> "PKU-SafeRLHF harm-category filtered, 11.8% mental-health keyword coverage". (c) The claim
+> is reframed accordingly: what the experiment can support is whether **general-harm safety
+> preference data transfers to therapy-domain adversarial prompts**, which is a narrower and
+> more honest statement than the original wording implied.
+> **Direction of effect:** if T_ctrl matches T, the headline result is attributable to
+> out-of-domain data rather than to safety content, and the paper must say so. This revision
+> creates the possibility of falsifying our own claim, which is why it is being run.
 
 **Matched data volume:** B2 and T both train on 19,924 preference pairs — same total, same
 optimiser steps, only composition differs. Otherwise a T improvement would be confounded

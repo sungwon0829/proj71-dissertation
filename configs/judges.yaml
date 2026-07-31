@@ -10,8 +10,20 @@
 # references. eval_score.py records the SHA-256 of this config and of every prompt file used
 # into every scored output, so a later edit is detectable after the fact.
 # ---------------------------------------------------------------------------------------
-pin_status: PROVISIONAL_NOT_PINNED
-pin_date: null
+# *** PINNED 2026-08-01. THE PROMPT FILES ARE NOW IMMUTABLE. ***
+# If a judge is later found to be wrong, it is REPORTED AS A LIMITATION, not fixed. Editing a
+# prompt after this date invalidates every number already produced.
+#
+# The pin itself lives in a SEPARATE file, configs/judges_pinned.lock.json, because a guard
+# that can be disabled by editing the thing it guards is not a guard. eval_score.py verifies
+# every live prompt file against the hashes in the lock and REFUSES TO RUN on a mismatch, the
+# same way it refuses to score a stale adapter. Defeating that requires editing the prompt,
+# the lock, AND pin_lock_sha256 below -- three deliberate edits, all visible in git and all
+# contradicted by the prompt hashes already written into every scored output on disk.
+pin_status: PINNED
+pin_date: "2026-08-01"
+pin_lock_file: configs/judges_pinned.lock.json
+pin_lock_sha256: "5fafee460ad1b8aaa8cbd279815e5e0c1067f0ad36a558cbc68441c667870344"
 
 # ===== MEASURED AGREEMENT (Cohen's kappa vs one hand labeller) =========================
 # Recorded here so the config carries its own evidence. Each figure names the set it was
