@@ -22,6 +22,7 @@ import argparse
 import json
 import random
 import re
+import unicodedata
 from collections import Counter, defaultdict
 from pathlib import Path
 
@@ -178,6 +179,365 @@ def process_esconv_validation():
 
 
 # ---------------------------------------------------------------------------
+# CounselChat therapist-identity scrubber
+#
+# CounselChat's answerText fields end with the (non-anonymised) therapist's own
+# sign-off ("Robin J. Landwehr, DBH, LPCC, NCC", "- Landwehr, DBH", "www.<their
+# practice>.com", personal phone numbers, ...). therapistInfo / therapistURL give
+# us ground truth for *that row's own* therapist, and we use ONLY that per-row
+# ground truth to find and remove identity from the row's own answer -- never a
+# global name blocklist, and never third-party names a therapist happens to
+# mention (e.g. "As Sherry mentioned, ..." in someone else's answer is left
+# alone; it is not this row's own identity).
+#
+# Method, in order:
+#  1. Derive (first_name, last_name) for the therapist from therapistInfo, cross-
+#     checked against therapistURL (see derive_therapist_name / notebook write-up
+#     for the full rationale). Falls back to therapistURL parsing, then to a tiny
+#     manual-override table for the handful of cases where the source text is too
+#     ambiguous for either automated path (documented inline).
+#  2. Remove "First [Middle...] Last[, CREDENTIALS...]" wherever it appears in
+#     that row's own answerText (case-insensitive, word-boundaried). Also a
+#     narrower fallback: a bare last-name sign-off + credentials sitting at the
+#     very end of the answer (first name dropped).
+#  3. Remove personal phone numbers -- but NEVER a number that sits next to
+#     crisis/hotline/lifeline language (verified against the raw corpus: national
+#     and local crisis lines appear throughout and must never be stripped).
+#  4. Remove practice/clinic URLs: (a) a URL the therapist self-declares inside
+#     their own therapistInfo bio, (b) a URL whose host contains their own name,
+#     (c) a URL immediately preceded by "my website/practice/site/..." in their
+#     own answer. Generic reference/resource links (hotlines, articles, other
+#     people's blogs) are deliberately left untouched -- that is therapeutic
+#     content, not identity.
+#  5. No email addresses were found anywhere in the raw corpus (verified below).
+#
+# This is a content-preserving scrub: only the identity span itself is removed,
+# never replaced with a placeholder the model could learn to emit, and sign-off
+# language ("Be well,", "Warmly,") is left in place.
+# ---------------------------------------------------------------------------
+
+TITLE_PREFIXES = {"dr", "dr.", "mr", "mr.", "mrs", "mrs.", "ms", "ms.", "miss", "rev", "rev.", "prof", "prof."}
+_CAMEL_PROTECT_MIN_RUN = 3  # do not treat a lower->upper transition as a name/tagline
+                            # boundary unless the run since the last space/hyphen is
+                            # this long (protects "Ph"|"D", "La"|"Rose", "Mc"|"Donald")
+_NAME_TOKEN_RE = re.compile(r"^[A-Za-z][A-Za-z'\-]*$")
+
+# Handful of therapistInfo strings where neither the camelCase/comma heuristic nor
+# the therapistURL fallback resolves correctly (verified by hand against the raw
+# corpus -- see notebook/pending_scrub.md for the full derivation trace):
+#   - "JanaLee" is itself internally capitalised (no separating space), which is
+#     indistinguishable, by rule, from the name/tagline fusion boundary we rely on
+#     everywhere else.
+#   - "Ilse de León" / "Eric Ström": the therapistURL slug drops the accented
+#     character entirely, so the URL cross-check can't confirm the correct name.
+#   - "Cory Ian Shafer": three-token name (first, middle, last) with no comma
+#     before the credential block, so the generic segmentation can't tell "Ian"
+#     apart from the surname.
+#   - "Christina McGrath Fair": double-barrelled surname with no comma and no
+#     camelCase boundary before the tagline (a curly-quote opens the tagline).
+_MANUAL_NAME_OVERRIDES = {
+    "JanaLee WagnerHope through life's complications. ": ("JanaLee", "Wagner"),
+    "Ilse de LeónYou matter!": ("Ilse", "León"),
+    "Eric Ström, JD, MA, LMHCAttorney & Licensed Mental Health Counselor": ("Eric", "Ström"),
+    "Cory Ian Shafer LPCPsychotherapist, Jungian, Hypnotherapy": ("Cory", "Shafer"),
+    'Christina McGrath Fair"Enlightenment is when a wave realizes it is the ocean." -Thich Nhat Hanh': ("Christina", "Fair"),
+}
+
+# therapistURL slug tokens that are credential/qualifier codes, not name tokens
+# (used only for the therapistURL fallback path).
+_CREDENTIAL_STOPLIST = {
+    "ma", "ms", "msw", "mft", "lmft", "lpc", "lpcc", "lpca", "lcsw", "licsw", "lmsw",
+    "ncc", "phd", "psyd", "edd", "dbh", "lmhc", "mhc", "rn", "bcba", "cadc", "atr",
+    "cst", "ceds", "bc", "tmh", "cctp", "cchi", "cch", "s", "llc", "pllc", "pc", "jd",
+    "mdiv", "dmin", "np", "otr", "l", "clt", "caps", "dcc", "emdr", "lcac", "ads",
+    "mph", "mbe", "abpp", "cbist", "casac", "mac", "cip", "laadc", "ccmi", "lcdc",
+    "lac", "rmft", "msc", "cht", "med",
+}
+
+
+def _norm_cmp(s: str) -> str:
+    """Diacritic-, case-, and punctuation-insensitive comparison key."""
+    s = unicodedata.normalize("NFKD", s)
+    s = "".join(c for c in s if not unicodedata.combining(c))
+    return re.sub(r"[^a-z0-9]", "", s.lower())
+
+
+def _camel_first_segment(s: str) -> str:
+    """therapistInfo fuses "Name" directly onto a free-text tagline with no
+    separator ("Robin Landwehr, DBH, LPCC, NCCMental Health in a Primary Care
+    Setting"). Return the text up to the first genuine name/tagline boundary
+    (a lowercase letter immediately followed by an uppercase letter), ignoring
+    boundaries whose preceding run (since the last space or hyphen) is shorter
+    than _CAMEL_PROTECT_MIN_RUN -- these are credential-initial or compound-name
+    fragments ("Ph"|"D", "La"|"Rose"), not real boundaries."""
+    run_start = 0
+    for i in range(1, len(s)):
+        if s[i - 1].islower() and s[i].isupper() and (i - run_start) >= _CAMEL_PROTECT_MIN_RUN:
+            return s[:i]
+        if s[i] in " -":
+            run_start = i + 1
+    return s
+
+
+def _primary_derive_name(info_raw: str):
+    info = ftfy.fix_text(info_raw or "").strip()
+    seg = _camel_first_segment(info)
+    if "," in seg:
+        seg = seg.split(",", 1)[0]
+    tokens = seg.strip().split()
+    while tokens and tokens[0].lower() in TITLE_PREFIXES:
+        tokens = tokens[1:]
+    if not tokens:
+        return None, None
+    first = tokens[0].strip(".")
+    last = tokens[-1].strip(".") if len(tokens) > 1 else first
+    return first, last
+
+
+def _slug_tokens(url: str):
+    slug = url.rstrip("/").split("/")[-1]
+    toks = [t for t in slug.split("-") if t]
+    while toks and toks[0] in TITLE_PREFIXES:
+        toks = toks[1:]
+    return toks
+
+
+def _slug_confirms(first: str, last: str, slug_toks) -> bool:
+    """Confirm `last` appears in slug_toks at some position after `first`, but
+    never search past the first credential/qualifier token (or a numeric
+    disambiguator) -- otherwise a credential that happens to equal the (wrongly
+    derived) `last` candidate, e.g. "...-lmhc-..." confirming a bad last="LMHC",
+    would falsely validate a broken primary derivation (verified against the
+    raw corpus: this exact failure mode occurred for "Barika Grayson LMHC")."""
+    if not slug_toks or _norm_cmp(slug_toks[0]) != _norm_cmp(first):
+        return False
+    boundary = len(slug_toks)
+    for idx in range(1, len(slug_toks)):
+        if slug_toks[idx] in _CREDENTIAL_STOPLIST or slug_toks[idx].isdigit():
+            boundary = idx
+            break
+    last_n = _norm_cmp(last)
+    for start in range(1, boundary):
+        for k in range(1, 4):
+            if start + k > boundary:
+                continue
+            if _norm_cmp("".join(slug_toks[start:start + k])) == last_n:
+                return True
+    return False
+
+
+def derive_therapist_name(info_raw: str, url: str):
+    """Return (first_name, last_name, source) for one therapistInfo/therapistURL
+    pair. source is one of: manual_override, therapistInfo, url_fallback,
+    url_fallback_single, url_fallback_no_last, non_personal (a CounselChat
+    account for an organisation, not an individual -- name scrubbing is skipped
+    and this is reported explicitly), unresolved (no usable slug at all)."""
+    if info_raw in _MANUAL_NAME_OVERRIDES:
+        first, last = _MANUAL_NAME_OVERRIDES[info_raw]
+        return first, last, "manual_override"
+
+    first, last, source = _derive_therapist_name_uncapped(info_raw, url)
+
+    # A last name shorter than 3 characters (e.g. a bare initial like "C.") is
+    # too generic to use as a corpus-wide removal anchor -- it produces false
+    # positives against unrelated text (verified against the raw corpus: a
+    # therapist signing only "Stephanie C." caused dozens of coincidental
+    # matches elsewhere). Skip name-based scrubbing for these rather than ship
+    # a regex known to over-match; reported explicitly via this source label.
+    if last is not None and len(last) < 3:
+        return None, None, "insufficient_confidence_short_last_name"
+    return first, last, source
+
+
+def _derive_therapist_name_uncapped(info_raw: str, url: str):
+    first, last = _primary_derive_name(info_raw)
+    slug_toks = _slug_tokens(url)
+
+    if (first and _NAME_TOKEN_RE.match(first) and last and _NAME_TOKEN_RE.match(last)
+            and _slug_confirms(first, last, slug_toks)):
+        return first, last, "therapistInfo"
+
+    if not slug_toks:
+        return None, None, "unresolved"
+    f = slug_toks[0]
+    if not re.match(r"^[a-z]", f):
+        return None, None, "non_personal"
+    rest = slug_toks[1:]
+    if not rest:
+        return f.capitalize(), f.capitalize(), "url_fallback_single"
+    if rest[0] in _CREDENTIAL_STOPLIST or rest[0].isdigit():
+        return f.capitalize(), f.capitalize(), "url_fallback_no_last"
+    return f.capitalize(), rest[0].capitalize(), "url_fallback"
+
+
+# --- removal patterns --------------------------------------------------------
+
+_MIDDLE = r"(?:\s+[A-Z][A-Za-z'\.\-]*){0,3}"  # optional middle name(s)/initial(s)
+_CREDS = r"(?:[,.]?\s*[A-Z]{1,6}(?:[/\-][A-Za-z]{1,4})?){0,6}"  # trailing credential list
+
+_HOTLINE_KEYWORDS_RE = re.compile(
+    r"hotline|lifeline|crisis|talkline|trevor|prevention|suicide|911|988|helpline|"
+    r"text\s*line|textline",
+    re.IGNORECASE,
+)
+_PHONE_RE = re.compile(r"(?<!\d)(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]\d{3}[-.\s]\d{4}(?!\d)")
+_EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
+_URL_RE = re.compile(r"(https?://\S+|www\.\S+)")
+_SELF_REF_RE = re.compile(
+    r"\bmy\s+(?:website|practice|site|blog|page|clinic|office)\b", re.IGNORECASE
+)
+
+
+def _name_pattern(first: str, last: str):
+    return re.compile(
+        rf"\b{re.escape(first)}{_MIDDLE}\s+{re.escape(last)}\b{_CREDS}", re.IGNORECASE
+    )
+
+
+def scrub_name(answer: str, first: str, last: str):
+    """Remove "First [Middle...] Last[, CREDENTIALS...]" wherever it appears.
+    Deliberately does NOT also strip a bare last-name-only sign-off: tested
+    against the raw corpus, a solo-surname rule was found to false-positive on
+    quote attributions that happen to end an answer (e.g. a different
+    therapist's answer ending "...~Brene Brown", where "Brown" coincidentally
+    matches another therapist's own surname) while adding zero verified true
+    positives over the combined first+last pattern above."""
+    return _name_pattern(first, last).subn("", answer)
+
+
+def scrub_phone(answer: str):
+    """Remove phone numbers except ones sitting next to crisis/hotline language
+    (verified against the raw corpus: national/local crisis lines are referenced
+    throughout CounselChat answers and must never be stripped -- this is a
+    therapy-support safety dataset)."""
+    out = []
+    n_removed = 0
+    last_end = 0
+    for m in _PHONE_RE.finditer(answer):
+        ctx = answer[max(0, m.start() - 80): m.end() + 130]
+        if _HOTLINE_KEYWORDS_RE.search(ctx):
+            continue
+        out.append(answer[last_end:m.start()])
+        last_end = m.end()
+        n_removed += 1
+    out.append(answer[last_end:])
+    return "".join(out), n_removed
+
+
+def scrub_email(answer: str):
+    return _EMAIL_RE.subn("", answer)
+
+
+def _url_host(u: str) -> str:
+    u = re.sub(r"^https?://", "", u, flags=re.IGNORECASE)
+    u = re.sub(r"^www\.", "", u, flags=re.IGNORECASE)
+    return re.split(r"[/?#\s]", u, 1)[0]
+
+
+def _declared_domain(info_raw: str):
+    """A URL the therapist embedded in their own therapistInfo bio -- self-
+    declared ground truth, safe to treat as personal."""
+    m = _URL_RE.search(ftfy.fix_text(info_raw or ""))
+    return _norm_cmp(_url_host(m.group())) if m else None
+
+
+def scrub_url(answer: str, info_raw: str, first, last):
+    """Remove practice/clinic URLs grounded in (a) the therapist's own
+    self-declared URL, (b) their own name appearing in the host, or (c) an
+    explicit in-answer self-reference ("my website/practice/..."). Generic
+    reference links (hotlines, articles, other people's sites) are left alone
+    -- see notebook/pending_scrub.md for the documented residual list of
+    practice URLs this does *not* catch (URLs with neither the therapist's own
+    name nor a self-referential phrase nearby)."""
+    dom = _declared_domain(info_raw)
+    first_n = _norm_cmp(first) if first else ""
+    last_n = _norm_cmp(last) if last else ""
+    n_removed = 0
+    out = []
+    last_end = 0
+    for m in _URL_RE.finditer(answer):
+        host_n = _norm_cmp(_url_host(m.group()))
+        personal = (
+            (dom and (host_n == dom or dom in host_n))
+            or (len(last_n) >= 4 and last_n in host_n)
+            or (len(first_n) >= 5 and first_n in host_n)
+            or bool(_SELF_REF_RE.search(answer[max(0, m.start() - 60):m.start()]))
+        )
+        if personal:
+            out.append(answer[last_end:m.start()])
+            last_end = m.end()
+            n_removed += 1
+    out.append(answer[last_end:])
+    return "".join(out), n_removed
+
+
+def cleanup_trailing_punctuation(answer: str) -> str:
+    """After removing a sign-off from the very end of an answer, strip any
+    now-dangling connector punctuation ("Be well," -> "Be well") without ever
+    touching a real sentence-ending period."""
+    return re.sub(r"[\s,;:\-–~]+$", "", answer)
+
+
+def scrub_therapist_identity(answer_fixed: str, info_raw: str, url: str, name_cache: dict):
+    """Scrub one CounselChat answerText of its own therapist's identity.
+    Returns (scrubbed_answer, per_row_stats). name_cache memoises
+    derive_therapist_name() per distinct therapistInfo string."""
+    if info_raw not in name_cache:
+        name_cache[info_raw] = derive_therapist_name(info_raw, url)
+    first, last, source = name_cache[info_raw]
+
+    stats = {"name_removed": 0, "phone_removed": 0, "url_removed": 0}
+    ans = answer_fixed
+    if first is not None:
+        ans, stats["name_removed"] = scrub_name(ans, first, last)
+    ans, stats["phone_removed"] = scrub_phone(ans)
+    ans, n_email = scrub_email(ans)
+    stats["email_removed"] = n_email
+    ans, stats["url_removed"] = scrub_url(ans, info_raw, first, last)
+    ans = cleanup_trailing_punctuation(ans)
+    return ans, stats
+
+
+def verify_no_residual_names(records, name_cache, context: str):
+    """Corpus-wide diagnostic sweep: does ANY known therapist's own (first,
+    last) name pattern appear ANYWHERE in the (already-scrubbed) output?
+
+    This is broader than the actual scrub (which only ever removes a row's OWN
+    author name from its OWN answer) and broader than the same-row hard gate
+    enforced inside load_and_clean_counsel() (which already guarantees, by
+    construction, that no row's own identity survives in its own answer --
+    that check raises immediately if it ever fails). Any hit reported here is
+    therefore necessarily a *different* author's name coincidentally appearing
+    in someone else's text -- e.g. a quote attribution ("...as Fred Rogers once
+    said...") or a shared surname -- not a scrub failure. Reported for full
+    auditability, not treated as fatal."""
+    residual = []
+    for r in records:
+        for m in r["messages"]:
+            if m["role"] != "assistant":
+                continue
+            text = m["content"]
+            for info_raw, (first, last, source) in name_cache.items():
+                if first is None:
+                    continue
+                mm = _name_pattern(first, last).search(text)
+                if mm:
+                    ctx = text[max(0, mm.start() - 60): mm.end() + 20]
+                    residual.append((first, last, ctx))
+    if residual:
+        print(f"Cross-reference name-string hits in {context}: {len(residual)} "
+              "(same-row self-identity is already guaranteed impossible -- see "
+              "load_and_clean_counsel()'s per-row hard gate; these are a "
+              "different author's name coincidentally present in someone "
+              "else's text, e.g. a quote attribution):")
+        for first, last, ctx in residual:
+            print(f"  {first} {last}: ...{ctx!r}...")
+    else:
+        print(f"Residual name check ({context}): 0 hits across {len(records)} records.")
+    return len(residual)
+
+
+# ---------------------------------------------------------------------------
 # CounselChat: load + mojibake repair, then dedup, then message-building
 # ---------------------------------------------------------------------------
 
@@ -200,6 +560,7 @@ def load_and_clean_counsel():
 
     field_anomalies = []
     dropped_empty_answer_ids = []
+    dropped_empty_after_scrub_ids = []
 
     before_fffd_rows = 0
     before_fffd_chars = 0
@@ -208,6 +569,19 @@ def load_and_clean_counsel():
 
     candidates = []
 
+    # Therapist-identity scrub bookkeeping (see scrub_therapist_identity() /
+    # derive_therapist_name() above). name_cache memoises the derived name per
+    # distinct therapistInfo string so it is computed once, not per-row.
+    name_cache = {}
+    scrub_rows_with_name_hit = 0
+    scrub_total_name_removals = 0
+    scrub_total_phone_removals = 0
+    scrub_total_email_removals = 0
+    scrub_total_url_removals = 0
+    scrub_before_lens = []
+    scrub_after_lens = []
+    scrub_big_loss = []  # (qid, therapistInfo, before_len, after_len, snippet)
+
     for i, row in enumerate(train):
         qid = row.get("questionID")
         title = row.get("questionTitle")
@@ -215,6 +589,8 @@ def load_and_clean_counsel():
         answer = row.get("answerText")
         upvotes = row.get("upvotes")
         views = row.get("views")
+        therapist_info = row.get("therapistInfo")
+        therapist_url = row.get("therapistURL")
 
         title_raw = s_or_empty(title)
         qtext_raw = s_or_empty(qtext)
@@ -257,13 +633,52 @@ def load_and_clean_counsel():
             dropped_empty_answer_ids.append(qid)
             continue
 
+        answer_before_scrub = answer_fixed.strip()
+        answer_scrubbed, scrub_stats = scrub_therapist_identity(
+            answer_before_scrub, therapist_info, therapist_url, name_cache
+        )
+
+        # Same-row hard gate: this row's OWN derived name must not survive in
+        # its OWN scrubbed answer. Fail loudly and immediately rather than
+        # discover a leak later -- this is the actual privacy guarantee; the
+        # corpus-wide sweep in verify_no_residual_names() is a broader,
+        # informational diagnostic on top of this.
+        own_first, own_last, _own_source = name_cache[therapist_info]
+        if own_first is not None and _name_pattern(own_first, own_last).search(answer_scrubbed):
+            raise RuntimeError(
+                f"Therapist-identity scrub failed on its OWN row: questionID={qid}, "
+                f"therapistInfo={therapist_info!r} — derived name "
+                f"({own_first!r}, {own_last!r}) still present in the scrubbed answer. "
+                "Aborting rather than shipping a known leak."
+            )
+
+        before_len = len(answer_before_scrub)
+        after_len = len(answer_scrubbed.strip())
+        scrub_before_lens.append(before_len)
+        scrub_after_lens.append(after_len)
+        if scrub_stats["name_removed"]:
+            scrub_rows_with_name_hit += 1
+        scrub_total_name_removals += scrub_stats["name_removed"]
+        scrub_total_phone_removals += scrub_stats["phone_removed"]
+        scrub_total_email_removals += scrub_stats["email_removed"]
+        scrub_total_url_removals += scrub_stats["url_removed"]
+        if before_len > 0 and (before_len - after_len) / before_len > 0.20:
+            scrub_big_loss.append((qid, therapist_info, before_len, after_len, answer_scrubbed[:200]))
+
+        if not answer_scrubbed.strip():
+            # Scrubbing must never silently swallow an answer -- if it does,
+            # drop it loudly and count it (requirement: fail loudly, never
+            # silently skip/truncate).
+            dropped_empty_after_scrub_ids.append(qid)
+            continue
+
         candidates.append(
             {
                 "idx": i,
                 "qid": qid,
                 "title_s": title_s,
                 "qtext_s": qtext_s,
-                "answer_s": answer_fixed.strip(),
+                "answer_s": answer_scrubbed.strip(),
                 "upvotes": upvotes,
                 "views": views,
             }
@@ -303,6 +718,43 @@ def load_and_clean_counsel():
                     c["qtext_s"] = c["qtext_s"].replace(FFFD, "")
                     c["answer_s"] = c["answer_s"].replace(FFFD, "")
 
+    # --- therapist-identity scrub summary ---
+    name_sources = Counter(source for (_, _, source) in name_cache.values())
+    non_personal_therapists = [
+        info for info, (f, l, source) in name_cache.items() if source == "non_personal"
+    ]
+    unresolved_therapists = [
+        info for info, (f, l, source) in name_cache.items() if source == "unresolved"
+    ]
+    b = np.array(scrub_before_lens, dtype=np.int64) if scrub_before_lens else np.array([0])
+    a = np.array(scrub_after_lens, dtype=np.int64) if scrub_after_lens else np.array([0])
+    scrub_report = {
+        "distinct_therapists": len(name_cache),
+        "distinct_therapist_name_sources": dict(name_sources),
+        "non_personal_therapist_accounts": non_personal_therapists,
+        "unresolved_therapists": unresolved_therapists,
+        "answers_with_name_removed": scrub_rows_with_name_hit,
+        "total_name_span_removals": scrub_total_name_removals,
+        "total_phone_removals": scrub_total_phone_removals,
+        "total_email_removals": scrub_total_email_removals,
+        "total_url_removals": scrub_total_url_removals,
+        "dropped_empty_after_scrub_count": len(dropped_empty_after_scrub_ids),
+        "dropped_empty_after_scrub_questionIDs": dropped_empty_after_scrub_ids,
+        "length_before": {
+            "min": int(b.min()), "median": float(np.median(b)),
+            "p95": float(np.percentile(b, 95)), "max": int(b.max()), "mean": float(b.mean()),
+        },
+        "length_after": {
+            "min": int(a.min()), "median": float(np.median(a)),
+            "p95": float(np.percentile(a, 95)), "max": int(a.max()), "mean": float(a.mean()),
+        },
+        "rows_losing_over_20pct_length": len(scrub_big_loss),
+        "rows_losing_over_20pct_length_examples": [
+            {"questionID": qid, "therapistInfo": info, "before_len": bl, "after_len": al, "after_snippet": snip}
+            for qid, info, bl, al, snip in scrub_big_loss[:10]
+        ],
+    }
+
     report = {
         "input_rows": n_input,
         "dropped_empty_answer_count": len(dropped_empty_answer_ids),
@@ -320,9 +772,10 @@ def load_and_clean_counsel():
             "decision": mojibake_decision,
             "dropped_questionIDs": mojibake_dropped_qids if mojibake_decision == "drop" else [],
         },
+        "therapist_identity_scrub": scrub_report,
         "split_used": "train (only split available)",
     }
-    return candidates, report
+    return candidates, report, name_cache
 
 
 def dedup_mode_type(s: str):
@@ -568,7 +1021,7 @@ def main():
     print("=" * 70)
     print("CounselChat: load, mojibake repair, empty-answer drop")
     print("=" * 70)
-    candidates, counsel_load_report = load_and_clean_counsel()
+    candidates, counsel_load_report, therapist_name_cache = load_and_clean_counsel()
     if not candidates:
         raise RuntimeError("CounselChat produced zero surviving rows before dedup — aborting.")
     print(json.dumps(counsel_load_report, indent=2))
@@ -596,6 +1049,14 @@ def main():
         },
         indent=2,
     ))
+
+    print()
+    print("=" * 70)
+    print("CounselChat therapist-identity scrub: residual verification")
+    print("=" * 70)
+    verify_no_residual_names(
+        counsel_records, therapist_name_cache, "sft_counsel.jsonl (post-scrub, post-dedup)"
+    )
 
     print()
     print("=" * 70)
@@ -656,6 +1117,14 @@ def main():
         )
     )
     print(f"Wrote {len(merged)} records -> {OUT_TRAIN}")
+
+    print()
+    print("=" * 70)
+    print("Final residual verification: sft_train.jsonl (as written to disk)")
+    print("=" * 70)
+    verify_no_residual_names(
+        merged, therapist_name_cache, "sft_train.jsonl (final, on-disk)"
+    )
 
 
 if __name__ == "__main__":

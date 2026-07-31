@@ -7,10 +7,12 @@ Produces: the B2 row (config: dpo_b2.yaml) or T row (config: dpo_t.yaml) in Tabl
 (via T) the ASR-per-category numbers in Table 2. B3 = B2 + guardrail filter at inference,
 so this script also produces the B3 baseline's underlying model.
 
-DRAFT ONLY as of the commit that introduces this file -- do not launch until the
-coordinator confirms the PROPOSED (not yet owner-confirmed) hyperparameters flagged in
-configs/dpo_b2.yaml / configs/dpo_t.yaml (learning_rate, num_train_epochs, beta, loss_type,
-precompute_ref_log_probs).
+Hyperparameters (learning_rate, num_train_epochs, beta, loss_type, precompute_ref_log_probs,
+etc.) are CONFIRMED as of 2026-07-31, with one binding requirement: B2 and T must be
+byte-identical on every training/model/lora hyperparameter and never differ except in data
+composition (n_helpful_sample, n_safety_sample, output_dir_template). This is asserted at
+startup (assert_hyperparams_match_sibling), not just documented -- since B2-vs-T is the
+whole experiment, any other difference between the two configs is a confound.
 
 Continuation semantics (the correctness-critical part): B2/T are "B1 + DPO", not "base +
 fresh-DPO-LoRA". The B1 LoRA checkpoint is loaded via
@@ -46,6 +48,7 @@ import random
 import sys
 import time
 from pathlib import Path
+from copy import deepcopy
 
 os.environ.setdefault("HF_HUB_OFFLINE", "1")
 os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
@@ -109,6 +112,97 @@ def assert_lora_matches_b1_template(this_lora_cfg: dict, sft_config_path: str = 
     print("[lora fixed-template assert] PASSED: this config's lora: block matches configs/sft_lora.yaml exactly.")
 
 
+# Keys allowed to differ between dpo_b2.yaml and dpo_t.yaml -- everything else in these
+# sections must be byte-identical, or a B2-vs-T comparison is confounded by something other
+# than data composition.
+_SIBLING_ALLOWED_TO_DIFFER = {
+    ("training", "output_dir_template"),
+    ("data", "n_helpful_sample"),
+    ("data", "n_safety_sample"),
+}
+_SIBLING_DATA_KEYS_MUST_MATCH = [
+    "max_length", "max_length_policy", "exclude_safety_inversions",
+    "chat_template_path", "system_prompt_file", "helpful_pool_source",
+]
+
+
+def _sibling_config_path(this_config_path: str) -> str:
+    name = os.path.basename(this_config_path).lower()
+    directory = os.path.dirname(this_config_path)
+    if "dpo_b2" in name:
+        return os.path.join(directory, "dpo_t.yaml")
+    if "dpo_t" in name:
+        return os.path.join(directory, "dpo_b2.yaml")
+    raise RuntimeError(
+        f"Cannot determine the sibling config for {this_config_path!r} -- expected a "
+        "filename containing 'dpo_b2' or 'dpo_t'. Refusing to skip the hyperparameter-"
+        "match assertion silently."
+    )
+
+
+def assert_hyperparams_match_sibling(this_config_path: str, this_cfg: dict) -> None:
+    """B2 vs T is the whole experiment (CLAUDE.md's ONE CLAIM). Any hyperparameter
+    difference between the two configs other than data composition is a confound, not a
+    tuning choice -- so this is a hard startup gate, exactly like the LoRA fixed-template
+    assert, not a documentation convention that can silently drift."""
+    sibling_path = _sibling_config_path(this_config_path)
+    if not os.path.isfile(sibling_path):
+        raise FileNotFoundError(
+            f"Cannot verify B2/T hyperparameter equality: sibling config {sibling_path} not found. "
+            "Refusing to proceed without both configs present to compare."
+        )
+    sibling_cfg = load_config(sibling_path)
+
+    mismatches = []
+    for section in ("model", "base_adapter", "lora", "training"):
+        this_section = this_cfg.get(section, {}) or {}
+        sib_section = sibling_cfg.get(section, {}) or {}
+        for key in set(this_section) | set(sib_section):
+            if (section, key) in _SIBLING_ALLOWED_TO_DIFFER:
+                continue
+            if this_section.get(key) != sib_section.get(key):
+                mismatches.append(
+                    f"{section}.{key}: this={this_section.get(key)!r} vs sibling={sib_section.get(key)!r}"
+                )
+    this_data = this_cfg.get("data", {}) or {}
+    sib_data = sibling_cfg.get("data", {}) or {}
+    for key in _SIBLING_DATA_KEYS_MUST_MATCH:
+        if this_data.get(key) != sib_data.get(key):
+            mismatches.append(f"data.{key}: this={this_data.get(key)!r} vs sibling={sib_data.get(key)!r}")
+
+    if mismatches:
+        raise RuntimeError(
+            "B2/T HYPERPARAMETER-MATCH ASSERT FAILED: this config and "
+            f"{sibling_path} differ in fields other than data composition. Mismatches: "
+            f"{'; '.join(mismatches)}. Per the coordinator's binding requirement, any "
+            "hyperparameter difference between B2 and T (other than n_helpful_sample / "
+            "n_safety_sample / output_dir_template) is a confound. Refusing to proceed."
+        )
+    print(f"[B2/T hyperparameter-match assert] PASSED: {this_config_path} matches {sibling_path} "
+          "on every field except data composition.")
+
+
+def check_gpu_headroom(min_free_gb: float = 20.0) -> None:
+    """Operational safety check, not a correctness gate: print current GPU memory state and
+    warn/raise if headroom looks thin. B1's full run already OOM'd once on a card that
+    looked fine at a glance; this is deliberately loud rather than silent about it. This is
+    informational only for concurrent contention -- the actual go/no-go decision (wait and
+    re-check vs. launch) is made by the operator using this output, per the coordinator's
+    explicit instruction."""
+    if not torch.cuda.is_available():
+        print("[gpu headroom] CUDA not available -- skipping (CPU run?).")
+        return
+    free_bytes, total_bytes = torch.cuda.mem_get_info()
+    free_gb = free_bytes / (1024 ** 3)
+    total_gb = total_bytes / (1024 ** 3)
+    print(f"[gpu headroom] {free_gb:.2f} GB free / {total_gb:.2f} GB total")
+    if free_gb < min_free_gb:
+        raise RuntimeError(
+            f"GPU headroom check FAILED: only {free_gb:.2f} GB free (< {min_free_gb} GB floor). "
+            "Refusing to launch into a contended card -- wait and re-check with nvidia-smi."
+        )
+
+
 def pair_id(pair: dict) -> str:
     """Stable content-hash identifier for a preference pair, independent of file order --
     used so the sampled pair ids logged per run are reproducible from (source data + seed +
@@ -142,6 +236,30 @@ def filter_by_max_length(pairs: list, tokenizer, max_length: int, pool_name: str
     return kept, n_excluded
 
 
+def assert_zero_truncation_dpo(train_pairs: list, tokenizer, max_length: int) -> None:
+    """Explicit, redundant final gate (mirrors train_sft.py's zero-truncation assert):
+    even though filter_by_max_length() already excluded every over-length row before
+    sampling, re-verify independently on the FINAL sampled training set that nothing here
+    would be truncated by DPOConfig's max_length -- state it and verify it, don't just
+    trust the earlier filter silently."""
+    offenders = []
+    for i, p in enumerate(train_pairs):
+        len_chosen = tokenized_len(tokenizer, p["prompt"] + p["chosen"])
+        len_rejected = tokenized_len(tokenizer, p["prompt"] + p["rejected"])
+        if len_chosen > max_length or len_rejected > max_length:
+            offenders.append((i, len_chosen, len_rejected))
+    if offenders:
+        detail = ", ".join(f"row {i} (chosen={lc}, rejected={lr})" for i, lc, lr in offenders[:20])
+        raise RuntimeError(
+            f"ZERO-TRUNCATION ASSERT FAILED (DPO, final sampled set): {len(offenders)} pair(s) "
+            f"exceed max_length={max_length}. First offenders: {detail}. This should be "
+            "impossible given filter_by_max_length() already ran -- something upstream is "
+            "wrong. Refusing to train."
+        )
+    print(f"[zero-truncation assert, DPO] PASSED: {len(train_pairs)} pairs, none exceed "
+          f"max_length={max_length}.")
+
+
 def load_jsonl(path: str) -> list:
     if not os.path.isfile(path):
         raise FileNotFoundError(f"File not found: {path}")
@@ -157,15 +275,214 @@ def load_jsonl(path: str) -> list:
     return rows
 
 
+def verify_reference_and_gradients(trainer, model, tokenizer, output_dir: str) -> None:
+    """The DPO analogue of B1's empirical assistant-only-loss masking verification.
+    assistant-only-loss has no analogue here, but the equivalent question is: is the
+    reference policy really B1's FROZEN adapter (not the base model, not a trainable
+    copy), and does the trainable ("default") adapter actually receive gradients? This is
+    checked directly against real model state and one real collated batch, not assumed
+    from `is_trainable=True` alone.
+
+    Static check (no forward pass needed): peft_config must contain both "default" and
+    "ref" adapters; at this point (before any optimizer step) their weights must be
+    numerically identical (the "ref" adapter was cloned from "default"/B1's checkpoint at
+    DPOTrainer construction time) and their requires_grad flags must differ (default=True,
+    ref=False) -- this alone is direct proof the reference is B1's own trained weights
+    (non-zero LoRA delta, unlike "the base model") and is frozen (unlike a trainable copy).
+
+    Dynamic check (one real batch, real forward+backward through the trainer's own loss):
+    manually re-derives the reference log-probs by switching the active adapter to "ref"
+    myself (reusing trl's own selective_log_softmax/use_adapter helpers, not reimplementing
+    the math) and cross-checks them against DPOTrainer's own cached/computed values: this
+    independently confirms the cached reference numbers really did come from the "ref"
+    adapter. Then runs the real trainer.compute_loss() (with the "default" adapter active,
+    gradients enabled) and calls .backward(), and inspects .grad on both adapters: default
+    must have a non-zero-norm gradient, ref's grad must stay None throughout. Gradients are
+    zeroed afterwards so this pre-flight check does not contaminate the first real training
+    step.
+
+    Writes a readable dump to <output_dir>/dpo_reference_verification.txt and raises if any
+    check fails (do not launch training on an unverified reference).
+    """
+    from trl.trainer.dpo_trainer import selective_log_softmax, use_adapter
+
+    lines = []
+
+    def log(msg):
+        print(msg)
+        lines.append(msg)
+
+    log("=" * 88)
+    log("DPO REFERENCE / GRADIENT VERIFICATION (one real batch)")
+    log("=" * 88)
+
+    # ---- Static check: adapters present, ref==default at init, requires_grad correct -----
+    adapter_names = set(model.peft_config.keys())
+    log(f"[adapters present] {sorted(adapter_names)}")
+    if "default" not in adapter_names or "ref" not in adapter_names:
+        raise RuntimeError(
+            f"REFERENCE VERIFICATION FAILED: expected adapters 'default' and 'ref', found {adapter_names}. "
+            "This means DPOTrainer did not create the expected frozen reference clone. Do not launch training."
+        )
+
+    default_named = {n: p for n, p in model.named_parameters() if ".default." in n}
+    ref_named = {n: p for n, p in model.named_parameters() if ".ref." in n}
+    if not default_named or not ref_named:
+        raise RuntimeError("REFERENCE VERIFICATION FAILED: found no per-adapter named parameters to compare.")
+
+    # Pick one concrete LoRA matrix to report in detail (readable evidence, not just a pass/fail).
+    sample_name = sorted(n for n in default_named if "lora_A" in n and "q_proj" in n)[0]
+    sample_ref_name = sample_name.replace(".default.", ".ref.")
+    default_sample = default_named[sample_name]
+    ref_sample = ref_named[sample_ref_name]
+
+    max_abs_diff = (default_sample.detach().float() - ref_sample.detach().float()).abs().max().item()
+    log(f"[sample param] {sample_name}")
+    log(f"  default.requires_grad={default_sample.requires_grad}  ref.requires_grad={ref_sample.requires_grad}")
+    log(f"  max|default - ref| at init = {max_abs_diff:.3e}  (expect ~0.0 -- ref is a clone of B1's default)")
+
+    if ref_sample.requires_grad:
+        raise RuntimeError("REFERENCE VERIFICATION FAILED: 'ref' adapter parameter has requires_grad=True "
+                            "(it should be frozen). Do not launch training.")
+    if not default_sample.requires_grad:
+        raise RuntimeError("REFERENCE VERIFICATION FAILED: 'default' adapter parameter has requires_grad=False "
+                            "(DPO would train nothing). Do not launch training.")
+    if max_abs_diff > 1e-4:
+        raise RuntimeError(
+            f"REFERENCE VERIFICATION FAILED: 'ref' adapter differs from 'default' by {max_abs_diff:.3e} at "
+            "initialization -- the reference clone should be numerically identical to B1's checkpoint at this "
+            "point (before any optimizer step). Do not launch training."
+        )
+    log("[static check] PASSED: ref is a frozen, numerically-identical clone of B1's trained (trainable) "
+        "'default' adapter -- not the base model (non-zero LoRA delta) and not a trainable copy.")
+
+    # ---- Dynamic check: one real batch, manual reference recomputation + real backward ----
+    batch = next(iter(trainer.get_train_dataloader()))
+    batch = {k: (v.to(model.device) if torch.is_tensor(v) else v) for k, v in batch.items()}
+
+    model.eval()
+    with torch.no_grad(), use_adapter(model, adapter_name="ref"):
+        assert model.active_adapters == ["ref"], f"active adapter did not switch to 'ref': {model.active_adapters}"
+        ref_out = model(
+            input_ids=batch["input_ids"], attention_mask=batch["attention_mask"], use_cache=False
+        )
+        ref_shift_logits = ref_out.logits[..., :-1, :]
+        shift_labels = batch["input_ids"][..., 1:]
+        shift_completion_mask = batch["completion_mask"][..., 1:]
+        # Upcast to float32 BEFORE masking/summing. The model forward itself still runs in
+        # bf16 (weights are bf16), but summing ~100-300 per-token log-probs (each already
+        # bf16-rounded) in bf16 accumulates real rounding error: at magnitudes of a few
+        # hundred, bf16's representable spacing is ~magnitude/128, e.g. ~2.3 at |x|=300 --
+        # comfortably able to produce a 0.5 divergence between two mathematically-equivalent
+        # summation orders with no bug involved. DPOTrainer's own cached ref_chosen_logps /
+        # ref_rejected_logps are float32 (confirmed empirically: printed without a dtype
+        # suffix, i.e. torch's default float32, vs. my first draft's uncast bf16 sum, which
+        # did print `dtype=torch.bfloat16`) -- so comparing a bf16 accumulation against a
+        # float32 one was never an apples-to-apples comparison. Fixed here.
+        ref_per_token_logps = selective_log_softmax(ref_shift_logits, shift_labels).float()
+        ref_per_token_logps[shift_completion_mask == 0] = 0.0
+        my_ref_logps = ref_per_token_logps.sum(dim=1)
+        my_ref_chosen, my_ref_rejected = my_ref_logps.chunk(2, dim=0)
+    log(f"[active adapters back to default after context exit] {model.active_adapters}")
+    assert model.active_adapters == ["default"], f"adapter did not restore to 'default': {model.active_adapters}"
+
+    if "ref_chosen_logps" in batch:
+        cached_chosen = batch["ref_chosen_logps"].float()
+        cached_rejected = batch["ref_rejected_logps"].float()
+        diff_chosen = (my_ref_chosen - cached_chosen).abs().max().item()
+        diff_rejected = (my_ref_rejected - cached_rejected).abs().max().item()
+        # Tolerance is relative-plus-absolute, not a flat epsilon: the underlying model
+        # forward pass runs in bf16 regardless of the float32 accumulation above, so a few
+        # bf16 quantization steps of residual difference (~1-2 at magnitudes of a few
+        # hundred) is expected numerical noise, not evidence of a wrong adapter. This was
+        # verified empirically on a tiny (16-example) synthetic batch, where the manual and
+        # cached values matched exactly once both were compared in float32.
+        tol_chosen = 2.0 + 0.02 * cached_chosen.abs().max().item()
+        tol_rejected = 2.0 + 0.02 * cached_rejected.abs().max().item()
+        log(f"[manual vs precomputed ref logps] max|diff| chosen={diff_chosen:.3e} (tol={tol_chosen:.2f}) "
+            f"rejected={diff_rejected:.3e} (tol={tol_rejected:.2f}) -- both should be small relative to bf16 "
+            "forward-pass precision at these magnitudes, not exactly 0")
+        if diff_chosen > tol_chosen or diff_rejected > tol_rejected:
+            raise RuntimeError(
+                "REFERENCE VERIFICATION FAILED: my independently-recomputed reference log-probs (via the "
+                "'ref' adapter) do not match DPOTrainer's own cached ref_chosen_logps/ref_rejected_logps, "
+                "beyond what bf16 forward-pass precision can explain. The precomputed reference may not "
+                "actually be B1's adapter. Do not launch training."
+            )
+        log("[dynamic reference check] PASSED: independently-recomputed 'ref'-adapter log-probs match "
+            "DPOTrainer's own cached reference log-probs within bf16-forward-pass precision.")
+    else:
+        log("[note] precompute_ref_log_probs=False for this config -- no cached values to cross-check; "
+            "the manual 'ref'-adapter forward pass above is itself the evidence that a real, distinct "
+            "frozen adapter was used.")
+
+    # ---- Real forward+backward through the trainer's own loss, gradients inspected --------
+    model.train()
+    for p in model.parameters():
+        p.grad = None
+    loss = trainer.compute_loss(model, batch, return_outputs=False)
+    loss.backward()
+
+    default_grad_norm = default_sample.grad.detach().float().norm().item() if default_sample.grad is not None else None
+    ref_grad = ref_sample.grad
+    log(f"[after one real backward()] loss={loss.item():.4f}")
+    log(f"  default adapter grad norm (sample param) = {default_grad_norm}")
+    log(f"  ref adapter grad (sample param) = {'None' if ref_grad is None else ref_grad.norm().item()}")
+
+    metrics = trainer._metrics.get("train", {})
+    for key in ("rewards/chosen", "rewards/rejected", "rewards/margins", "logps/chosen", "logps/rejected"):
+        if key in metrics and metrics[key]:
+            log(f"  {key} = {metrics[key][-1]:.4f}")
+    log("  (at initialization, default==ref exactly, so rewards/chosen and rewards/rejected are expected "
+        "~0 and loss ~ln(2)=0.6931 -- the standard DPO 'untrained-relative-to-its-own-reference' signature)")
+
+    # Clear gradients again before real training starts, so this pre-flight check does not
+    # contaminate the first real optimizer step.
+    for p in model.parameters():
+        p.grad = None
+
+    if default_grad_norm is None or default_grad_norm == 0.0:
+        raise RuntimeError(
+            "GRADIENT VERIFICATION FAILED: the trainable 'default' adapter received no gradient (or an "
+            "exactly-zero-norm gradient) from one real DPO loss.backward(). Do not launch training."
+        )
+    if ref_grad is not None:
+        raise RuntimeError(
+            "GRADIENT VERIFICATION FAILED: the frozen 'ref' adapter received a non-None gradient -- it "
+            "should never be touched by autograd. Do not launch training."
+        )
+    log("[dynamic gradient check] PASSED: 'default' adapter receives real, non-zero gradients; "
+        "'ref' adapter's grad stayed None throughout.")
+
+    dump_path = os.path.join(output_dir, "dpo_reference_verification.txt")
+    with open(dump_path, "w", encoding="utf-8") as f:
+        f.write("\n".join(lines))
+    print(f"[reference verification dump written to] {dump_path}")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Project 71 DPO training (shared by B2 and T)")
     parser.add_argument("--config", type=str, required=True, help="configs/dpo_b2.yaml or configs/dpo_t.yaml")
     parser.add_argument("--seed", type=int, required=True)
+    parser.add_argument(
+        "--max_steps",
+        type=int,
+        default=None,
+        help="Override max optimizer steps (for smoke checks only). Leave unset for a full run.",
+    )
+    parser.add_argument(
+        "--min_free_gpu_gb",
+        type=float,
+        default=20.0,
+        help="GPU headroom floor (GB); the script refuses to proceed below this.",
+    )
     args = parser.parse_args()
 
     cfg = load_config(args.config)
     seed = args.seed
     set_seed_everywhere(seed)
+
+    check_gpu_headroom(args.min_free_gpu_gb)
 
     m_cfg = cfg["model"]
     ba_cfg = cfg["base_adapter"]
@@ -185,6 +502,7 @@ def main():
     # ---- Hard gates -----------------------------------------------------------------------
     assert_never_redteam(d_cfg["safety_pairs_file"])
     assert_lora_matches_b1_template(l_cfg)
+    assert_hyperparams_match_sibling(args.config, cfg)
 
     # ---- Tokenizer + verified chat template (same one used for B1) -------------------------
     tokenizer = AutoTokenizer.from_pretrained(
@@ -264,6 +582,7 @@ def main():
     print(f"[written] {manifest_path}")
 
     train_pairs = sampled_helpful + sampled_safety
+    assert_zero_truncation_dpo(train_pairs, tokenizer, d_cfg["max_length"])
     train_dataset = Dataset.from_list(train_pairs)
 
     # ---- Model: base + B1's TRAINED LoRA adapter, loaded is_trainable=True so DPO continues
@@ -323,6 +642,7 @@ def main():
         save_strategy=t_cfg["save_strategy"],
         report_to=t_cfg["report_to"],
         train_sampling_strategy=t_cfg.get("train_sampling_strategy", "random"),
+        max_steps=args.max_steps if args.max_steps is not None else -1,
     )
 
     # model is already a PeftModel with a pretrained "default" adapter; do NOT pass
@@ -337,16 +657,26 @@ def main():
     )
 
     print(f"[max_length_policy] {d_cfg['max_length_policy']} (exclude, not truncate -- see config comments)")
-    print("\n*** DO NOT LAUNCH: this script is a draft pending the coordinator's confirmation of "
-          "proposed hyperparameters (learning_rate, num_train_epochs, beta, loss_type, "
-          "precompute_ref_log_probs). trainer.train() is intentionally not being called by "
-          "any automated harness until that confirmation is recorded in notebook/lab_notebook.md. ***\n")
 
-    # trainer.train()  # INTENTIONALLY COMMENTED OUT -- draft config, not yet launched.
-    # trainer.save_model(output_dir)
-    # model.save_pretrained(output_dir, selected_adapters=["default"])  # save ONLY the
-    #     trained adapter, not the frozen "ref" clone TRL added alongside it.
-    # tokenizer.save_pretrained(output_dir)
+    # ---- DPO analogue of B1's assistant-only-loss masking verification (critical gate) ------
+    verify_reference_and_gradients(trainer, model, tokenizer, output_dir)
+
+    # ---- Train --------------------------------------------------------------------------------
+    if torch.cuda.is_available():
+        torch.cuda.reset_peak_memory_stats()
+    t0 = time.time()
+    result = trainer.train()
+    wall = time.time() - t0
+    print(f"[train result] {result}")
+    print(f"[wall_clock_sec] {wall:.1f}")
+    if torch.cuda.is_available():
+        peak_gb = torch.cuda.max_memory_allocated() / (1024 ** 3)
+        print(f"[peak_vram_gb] {peak_gb:.2f}")
+
+    model.save_pretrained(output_dir, selected_adapters=["default"])  # save ONLY the trained
+    #     adapter, not the frozen "ref" clone TRL added alongside it.
+    tokenizer.save_pretrained(output_dir)
+    print(f"[done] model + tokenizer saved to {output_dir}")
 
 
 if __name__ == "__main__":

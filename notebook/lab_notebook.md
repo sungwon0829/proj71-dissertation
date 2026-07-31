@@ -789,3 +789,81 @@ import from `train_sft.py`.
 Binding requirement: these must be **byte-identical between `dpo_b2.yaml` and `dpo_t.yaml`**,
 asserted at startup. B2-vs-T is the entire experiment, so any hyperparameter difference
 between those two configs is a confound rather than a tuning choice.
+
+---
+
+## 2026-08-01 — PRIVACY INCIDENT: B1 memorised a real therapist's identity. B1 + B2 VOID.
+
+**Finding (from the eval-harness track, blind inspection of B1 generations on the frozen
+suite):** B1's response to `crisis_adjacent_012` ended with a real therapist's name and
+credentials, "Robin J. Landwehr, DBH," — verbatim reproduction of a signature block from
+the non-anonymised CounselChat `answerText` fields. CLAUDE.md had flagged CounselChat as
+non-anonymised and slated it for an ethics note; this shows the model does not merely
+contain the data but emits identifying details unprompted, in a crisis context. Treated as
+a privacy/ethics defect, not a data-quality footnote.
+
+**Owner decision: scrub and retrain.** Everything downstream of the tainted SFT data is
+void: B1 (`results\B1_sft_seed42\`) and B2 seed 1 (`results\B2_dpo_seed1\`).
+
+**Note on the void B2:** it COMPLETED normally before the decision could halt it — 1246/1246
+steps, train_loss 0.0706, 7070 s, peak VRAM 31.03 GB. It is void for data provenance, not
+training failure. Directory retained with `VOID_README.txt` and
+`train_VOID_stale_b1_base.log`. Two things carried forward from it: (a) the DPO
+memory/timing profile (~54 min ref-log-prob precompute + ~118 min training, 31 GB peak,
+~5.6 s/step), and (b) a flag that final `rewards/margins` ~8.3–9.2 with
+`rewards/accuracies` 0.975–1.0 is unusually separated for DPO and may indicate
+over-optimisation — to be re-checked on the clean rerun, and any beta/epoch change must
+then be applied identically to B2 and T.
+
+**Scrub (merged from `notebook\pending_scrub.md`).** `scripts\prepare_sft.py` edited in
+place. Rather than guessing at a generic sign-off regex, the fix uses CounselChat's own
+`therapistInfo`/`therapistURL` columns as ground truth and removes each answer's *own*
+author identity: name and credentials (camelCase/comma segmentation cross-validated against
+the URL slug, credential-boundary fix, 5 documented manual overrides for ambiguous cases),
+personal phone numbers (context-gated so crisis hotlines such as 1-800-273-8255 are never
+touched), and practice/clinic URLs. 437 distinct therapists in raw CounselChat (429 after
+the pre-existing empty-answer drop); **70 answers had name+credentials removed, 32 personal
+phone numbers, 23 practice URLs, 0 emails**.
+- Content preserved: median answer length 779 → 779 chars; **0 answers lost >20% length**;
+  0 answers emptied. Row counts unchanged: 910 / 1395 / 2305.
+- Verification is two-layer: a hard same-row gate that aborts the run on any self-leak,
+  plus a corpus-wide sweep. **0 residual self-identity leaks.** Exactly 1 explained
+  cross-reference remains ("Fred Rogers", a Mister Rogers quote attributed inside a
+  *different* therapist's answer — not a contributor identity).
+- ESConv confirmed unaffected by direct schema inspection, not assumption.
+- Determinism: two runs byte-identical. New `sft_train.jsonl` SHA-256
+  `46E87A39F239982F9E9994535B4A44209617800AFFDEEBFEAEC0AF8922DBF662`
+  (was `52A7074D…20DA3DE3` — the change is the point).
+- **Known residual limitation, documented not hidden:** a few practice URLs using a branded
+  name unrelated to the therapist's own name (e.g. `psychologyresource.ca`) are not caught,
+  since they are neither self-declared in `therapistInfo` nor name-matched. Lower severity
+  than the triggering issue; stated in `pending_scrub.md` §2.
+
+**Acceptance test for the retrain (pending):** regenerate against `crisis_adjacent_012` and
+confirm no name appears, plus grep all sanity generations against every known CounselChat
+therapist name. B1 v2 is not accepted until that passes.
+
+**For the paper.** This belongs in Ethics and in Discussion, and it is a genuine finding
+rather than an embarrassment to bury: an SFT corpus scraped from a public professional
+forum caused a therapy-support model to emit a named real clinician's identity in response
+to a crisis prompt. It was caught only because generations were inspected by hand — no
+metric in Table 1 or Table 2 would have surfaced it.
+
+## 2026-08-01 — Pre-registration REVISION 1 (ASR judge)
+
+`notebook\preregistration.md` §4 revised, dated, with the original text and reasoning
+retained verbatim. Blind κ on 100 held-out items put `beaver-dam-7b` at **0.355**, missing
+**17 of 29** genuine attack successes (9 many_shot, 5 prefilling, 3 persona) — systematic,
+not random: it fires on classical harmful *content* while this suite's successful attacks
+are content-light and behavioural. **Revision: ASR = union of beaver-dam and a new pinned
+rubric-based behavioural judge.** Independence unchanged and still enforced (neither ASR
+judge may be the B3 filter). κ for beaver-dam alone, behavioural alone, and the union will
+all be reported in Results.
+**Why this is a legitimate revision rather than result-shopping:** made 1 Aug, before the
+7 Aug judge-pinning deadline in CLAUDE.md, before B2/B3/T exist, and before any paper
+number was produced. The κ was measured blind and the revision follows from it; no result
+was observed and then optimised against.
+Also outstanding and NOT yet reportable: crisis judge κ = 0.091 (at chance) and a
+degenerate refusal κ (0 refusals hand-labelled in 20 benign items against a scored 43.3%
+rate, implying heavy false positives). Both are being reworked; `crisis_adjacent` ASR and
+the over-refusal column are not paper numbers until they are re-validated.
