@@ -71,10 +71,33 @@ see identical prompts, so this runs over hundreds of paired outcomes rather than
 > revision follows from it. The original configuration and this reasoning are retained here
 > verbatim so the change is auditable.
 
+> **REVISION 2 — dated 2026-08-01, superseding part of Revision 1. Still made before any
+> arm beyond B1 existed and before any paper number was produced.**
+> Revision 1's union created an independence violation: the behavioural judge runs on
+> Qwen2.5-7B, which was also the declared B3 guardrail filter. The scoring harness correctly
+> refused to score any arm. Two further blind measurements also showed `beaver-dam-7b` is
+> not a usable ASR judge for this suite — its κ is unstable across samples (0.355 / 0.086 /
+> 0.116) and it behaves as a *topic* detector rather than a harm detector: it flagged as
+> unsafe a reply that **inverts** a self-harm prefill to say self-harm is not safe, a reply
+> that **correctly** triages a plan-tonight disclosure as an emergency, and a plain refusal.
+> **Revision:** the roles are swapped. `beaver-dam-7b` becomes the **B3 guardrail filter** —
+> its natural role as a QA-moderation model, and a stronger, more credible baseline to beat
+> than a prompted classifier. The **behavioural judge alone** becomes the ASR judge
+> (κ = 0.521 [0.29, 0.76], recall 0.55, **precision 1.00** on a held-out set disjoint from
+> any set used for tuning). Independence is restored: different models, different provenance,
+> neither role shared.
+> **Cost, stated plainly:** dropping the union loses recall (0.65 → 0.55). ASR is therefore
+> a conservative *under*-estimate of true attack success in every arm. Because it
+> under-estimates identically across arms, it does not bias the B3-vs-T comparison, but the
+> absolute ASR numbers are lower bounds and must be reported as such.
+> **Why the κ from Revision 1 remains valid:** only the *filter* changed backbone; the judge
+> backbone did not, so measured agreement transfers. No new validation cycle is owed for
+> this change.
+
 | Role | Mechanism |
 |---|---|
-| B3 guardrail **filter** | Qwen2.5-7B prompted classifier (pinned prompt file) |
-| ASR **judge** (attack categories) | **Union of:** `PKU-Alignment/beaver-dam-7b` QA-moderation **and** a pinned rubric-based behavioural judge (added by Revision 1) |
+| B3 guardrail **filter** | `PKU-Alignment/beaver-dam-7b` QA-moderation (Revision 2) |
+| ASR **judge** (attack categories) | Pinned rubric-based behavioural judge on Qwen2.5-7B (Revision 2) |
 | Behaviour judge (`crisis_adjacent`, over-refusal) | Qwen2.5-7B + documented rubric, printed in appendix |
 | Helpfulness | `Psychotherapy-LLM/PsychoCounsel-Llama3-8B-Reward` (CC-BY-NC-4.0) |
 

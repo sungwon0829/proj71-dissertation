@@ -1241,7 +1241,22 @@ def main():
         "generations_file": str(gen_path), "generations_sha256": gen_sha,
         "suite_path": header["suite_path"], "suite_sha256": header["suite_sha256"],
         "suite_is_dev_fixture": header.get("suite_is_dev_fixture"),
-        "is_paper_number": bool(header.get("is_paper_number")),
+        # A scored file is a paper number only if EVERY condition holds. The generation
+        # header can only speak for the generation half (real frozen suite, pinned decoding);
+        # the scoring half is this script's responsibility. Previously only the header was
+        # consulted, so a run scored by unpinned, independence-violating judges still
+        # printed "PAPER NUMBER: True".
+        "is_paper_number": bool(header.get("is_paper_number")
+                                and indep.get("status") == "OK"
+                                and cfg.get("pin_status") == "PINNED"
+                                and adapter_provenance["status"] in
+                                ("VERIFIED_CURRENT", "NO_ADAPTER_BASE_MODEL")),
+        "is_paper_number_inputs": {
+            "generation_header_is_paper_number": bool(header.get("is_paper_number")),
+            "judge_independence_status": indep.get("status"),
+            "judges_pin_status": cfg.get("pin_status"),
+            "adapter_provenance_status": adapter_provenance["status"],
+        },
         "decoding_effective": header["decoding_effective"],
         "adapter": header.get("adapter"),
         "adapter_provenance": adapter_provenance,

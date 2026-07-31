@@ -158,6 +158,14 @@ def main():
             "peak VRAM before committing to a multi-hour run."
         ),
     )
+    parser.add_argument(
+        "--output_dir",
+        type=str,
+        default=None,
+        help="Override the config's output_dir_template result (e.g. to retrain on rescrubbed "
+        "data into a fresh directory such as results/B1_sft_seed42_v2 without touching or "
+        "overwriting an existing run's directory, and without editing the canonical config).",
+    )
     args = parser.parse_args()
 
     cfg = load_config(args.config)
@@ -174,7 +182,18 @@ def main():
     if not os.path.isfile(train_file):
         raise FileNotFoundError(f"Training data not found: {train_file} (fail loudly, not silently)")
 
-    output_dir = t_cfg["output_dir_template"].format(seed=seed)
+    output_dir = args.output_dir if args.output_dir is not None else t_cfg["output_dir_template"].format(seed=seed)
+    # Ignore the shell's own redirected log file (e.g. "train.log", created by the launching
+    # shell's `>` before this process even starts) when deciding whether the dir already has
+    # a prior run's artifacts in it.
+    if os.path.isdir(output_dir):
+        pre_existing = [f for f in os.listdir(output_dir) if not f.endswith(".log")]
+        if pre_existing:
+            raise RuntimeError(
+                f"Output dir {output_dir} already exists and is non-empty ({pre_existing}). "
+                "Refusing to overwrite an existing run's directory -- pass a fresh --output_dir "
+                "or clear it explicitly first."
+            )
     os.makedirs(output_dir, exist_ok=True)
 
     print(f"[config] {args.config}")

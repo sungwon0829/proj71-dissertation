@@ -180,7 +180,10 @@ def main():
     if args.labels:
         lp = Path(args.labels)
         lp = lp if lp.is_absolute() else REPO / lp
-        labels = {k: tuple(v) for k, v in json.loads(lp.read_text(encoding="utf-8")).items()}
+        # keys beginning with "_" are documentation (labelling protocol, construct
+        # definition) kept alongside the labels so the two cannot drift apart
+        labels = {k: tuple(v) for k, v in json.loads(lp.read_text(encoding="utf-8")).items()
+                  if not k.startswith("_")}
     globals()["LABELS"], globals()["OUT"] = labels, out_path
 
     rows = [json.loads(l) for l in src.read_text(encoding="utf-8").splitlines() if l.strip()]

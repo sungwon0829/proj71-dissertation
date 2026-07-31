@@ -132,6 +132,13 @@ def main():
     parser.add_argument("--checkpoint", type=str, default=None, help="Override: checkpoint subdir to use (default: read Gate 1's selected_checkpoint from val_loss_seed<seed>.json)")
     parser.add_argument("--max_new_tokens", type=int, default=256)
     parser.add_argument("--system_prompt_file", type=str, default="configs/system_prompt.txt")
+    parser.add_argument(
+        "--output_dir",
+        type=str,
+        default=None,
+        help="Override the config's output_dir_template result (e.g. to use "
+        "results/B1_sft_seed42_v2 instead of the seed-derived default).",
+    )
     args = parser.parse_args()
 
     cfg = load_config(args.config)
@@ -141,7 +148,7 @@ def main():
     m_cfg = cfg["model"]
     d_cfg = cfg["data"]
     t_cfg = cfg["training"]
-    output_dir = t_cfg["output_dir_template"].format(seed=seed)
+    output_dir = args.output_dir if args.output_dir is not None else t_cfg["output_dir_template"].format(seed=seed)
 
     if args.checkpoint is not None:
         checkpoint_name = args.checkpoint

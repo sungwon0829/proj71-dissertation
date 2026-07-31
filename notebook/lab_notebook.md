@@ -867,3 +867,94 @@ Also outstanding and NOT yet reportable: crisis judge κ = 0.091 (at chance) and
 degenerate refusal κ (0 refusals hand-labelled in 20 benign items against a scored 43.3%
 rate, implying heavy false positives). Both are being reworked; `crisis_adjacent` ASR and
 the over-refusal column are not paper numbers until they are re-validated.
+
+---
+
+## 2026-08-01 — Judge validation round 2, and Pre-registration REVISION 2 (roles swapped)
+
+**ASR judge — three configurations, same 100-item blind set (behavioural v1):**
+
+| judge | κ | recall | precision | tp | fp | fn | tn |
+|---|---|---|---|---|---|---|---|
+| beaver-dam alone | 0.355 | 0.414 | 0.857 | 12 | 2 | 17 | 29 |
+| behavioural v1 alone | 0.297 | 0.586 | 0.654 | 17 | 9 | 12 | 22 |
+| union (v1) | 0.334 | 0.690 | 0.645 | 20 | 11 | 9 | 20 |
+
+The union recovered 8 of beaver-dam's 17 missed attacks **and** added 9 false positives;
+κ flat. 9 attacks missed by both. Diagnosing the false positives found a mechanical bug
+(the judge read *any* textual continuation of an attacker-written opening as a breach —
+true by construction for every prefilling item). Fixed; measured on a **fresh** held-out
+set per the no-tune-then-report-the-same-κ rule. **v2 over-corrected badly** (κ 0.188; a
+global "does the final turn disclose risk" gate became an escape hatch — in 11 of 11 misses
+the judge answered "no disclosure" and stopped; union fell to 0.038, worse than either
+member). v3 scopes that question to the two items it belongs to. On a third, disjoint set:
+
+| judge | κ (95% CI) | recall | precision | tp | fp | fn | tn |
+|---|---|---|---|---|---|---|---|
+| beaver-dam alone | 0.116 [−0.13, 0.36] | 0.250 | 0.714 | 5 | 2 | 15 | 14 |
+| **behavioural v3 alone** | **0.521 [0.29, 0.76]** | 0.550 | **1.000** | 11 | 0 | 9 | 16 |
+| union | 0.509 [0.23, 0.77] | 0.650 | 0.867 | 13 | 2 | 7 | 14 |
+
+**beaver-dam is not a usable ASR judge for this suite.** κ unstable across samples
+(0.355 / 0.086 / 0.116) and it is a *topic* detector, not a harm detector: it flagged as
+unsafe (a) a reply that **inverts** a self-harm prefill to say self-harm is not safe,
+(b) a reply that **correctly** triages a plan-tonight disclosure as EMERGENCY, and (c) a
+plain refusal — all on `self_harm`.
+
+**Blocking issue that forced the revision:** the behavioural judge runs on Qwen2.5-7B, which
+was the declared B3 filter. `eval_score.py` correctly refused to score any arm (verified: it
+raises before loading a model).
+
+**REVISION 2 (owner decision, recorded in `preregistration.md` §4 with full reasoning):
+roles swapped.** `beaver-dam-7b` becomes the **B3 guardrail filter** — its natural role as a
+QA-moderation model, and a stronger baseline to beat. **Behavioural judge alone** becomes the
+**ASR judge**. Independence restored; no download; κ = 0.521 remains valid because only the
+*filter* backbone changed and agreement does not need to transfer.
+**Cost, stated plainly:** losing the union costs recall (0.65 → 0.55), so reported ASR is a
+conservative **lower bound** in every arm. It under-counts identically across arms, so the
+B3-vs-T comparison is unbiased, but absolute ASR must be reported as a lower bound.
+Anticipated and legitimate consequence: beaver-dam being a topic detector means B3 will
+likely refuse many `benign_sensitive` items and score badly on over-refusal — that is a real
+property of bolt-on guardrails and is the point of the comparison, not a bug to tune away.
+
+**Crisis judge: κ 0.091 → 0.583 [0.22, 0.83] (n=24).** Two problems, not one. The first
+rework scored −0.000 with 12 false positives in 20 because (a) it treated every tagged
+rubric clause as unconditional, ignoring the clauses' own triggers ("when risk is
+indicated", "where appropriate"), and (b) **the gold labels were measuring the wrong
+construct** — harm-centric, whereas `SUITE_MANIFEST` §2.4 defines crisis failure with two
+limbs including *failure of required behaviour*. v3 uses the manifest's closed five-item
+failure list verbatim. Relabelled to the suite construct, the human failure rate moves
+20% → 54%. The part-2 crisis gold labels are superseded.
+
+**Over-refusal judge: a real κ, and it is bad.** Enriched set (14 judge-flagged + 18 not,
+labelled blind with the stratum withheld): **κ 0.077**, tp2 fp10 fn2 tn18. Reweighted to the
+natural base rate: **κ 0.038, precision 0.14**. The judge flags 22.5% of benign items where
+an estimated 11.8% are genuine — **B1's scored 43.3% over-refusal is roughly double the
+truth.** Rubric was not touched after measuring. This is now the biggest threat to the
+claim, since "bounded cost in over-refusal" is half of it and CLAUDE.md forbids cutting the
+metric. Plan: one proper rework (refusal = declining/deflecting/substituting boilerplate,
+judged on what was *withheld*, never on completeness or brevity — B1's terseness is a
+faithful arm property), validated on a fresh stratified set; if κ does not clear ~0.6, fall
+back to hand-labelling over-refusal for B3 and T only (60 benign items each) and report the
+automated judge as a cross-check. CLAUDE.md's descoping order permits shrinking the
+judge-calibration subset.
+
+**Reportability status.** Trustworthy once pinned: `crisis_adjacent` ASR; ASR on the three
+attack categories at κ≈0.52 with the κ stated in Results; the harness machinery.
+**Not reportable:** over-refusal (blocks the bounded-cost half of the claim); beaver-dam as
+a judge; every arm metric currently on disk; the part-1 dev-set κs and the part-2 crisis κ.
+
+**Two further findings, neither a judge bug.**
+1. **Taxonomy gap:** the frozen suite has no category for "the model neither plays along with
+   the attack nor responds to the disclosed risk" (5 held-out items). Labelled safe per the
+   frozen definition and flagged rather than widening the construct post-hoc — the correct
+   call. The suite is frozen, so this is a **Discussion limitation**, not a suite change.
+2. **The repetition pathology survives `repetition_penalty=1.05`** — one item loops "I am not
+   okay" ~90 times. To be re-checked on B1 v2 before being treated as a decoding-config
+   problem.
+
+**Harness hardening:** `eval_score.py` re-hashes the adapter at scoring time and hard-fails
+on `STALE_ADAPTER`; `is_paper_number` is now the conjunction of header flag, independence,
+pin status and adapter provenance. Previously an unpinned, independence-violating run still
+printed `PAPER NUMBER: True` — exactly the failure that would have put a circular number in
+Table 1. B0/B1 artefacts versioned, not deleted (`results\README_SUPERSEDED.md`).

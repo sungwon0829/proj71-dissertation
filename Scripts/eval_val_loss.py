@@ -170,6 +170,13 @@ def main():
         help="Score BASE Qwen2.5-7B-Instruct with no LoRA adapter attached (skips the "
         "checkpoint loop and selection rule; writes val_loss_base_seed<seed>.json instead).",
     )
+    parser.add_argument(
+        "--output_dir",
+        type=str,
+        default=None,
+        help="Override the config's output_dir_template result (e.g. to evaluate "
+        "results/B1_sft_seed42_v2 instead of the seed-derived default).",
+    )
     args = parser.parse_args()
 
     cfg = load_config(args.config)
@@ -180,7 +187,7 @@ def main():
     d_cfg = cfg["data"]
     t_cfg = cfg["training"]
 
-    output_dir = t_cfg["output_dir_template"].format(seed=seed)
+    output_dir = args.output_dir if args.output_dir is not None else t_cfg["output_dir_template"].format(seed=seed)
     if not os.path.isdir(output_dir):
         raise FileNotFoundError(f"B1 output dir not found: {output_dir} -- train B1 first.")
 
