@@ -34,8 +34,14 @@ model:
 
 # The B1 checkpoint this arm is built on top of (Gate 1 selection, fixed in advance,
 # recorded in notebook/lab_notebook.md and notebook/preregistration.md -- not revisited here).
+# UPDATED 2026-08-01: results/B1_sft_seed42 (v1) is VOID -- B1 reproduced a real
+# CounselChat therapist's name+credentials verbatim (crisis_adjacent_012), traced to
+# non-anonymised signature blocks in the SFT data. Data was scrubbed and B1 retrained into
+# results/B1_sft_seed42_v2 (same config, same seed 42, same checkpoint-290 selected by the
+# same pre-fixed val-loss criterion). Every B2/T run must point here now; the v1 directory
+# is retained only as the void run's provenance record, never built on again.
 base_adapter:
-  b1_output_dir: results/B1_sft_seed42
+  b1_output_dir: results/B1_sft_seed42_v2
   b1_checkpoint: checkpoint-290
 
 data:

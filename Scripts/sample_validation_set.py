@@ -44,13 +44,24 @@ def load_generations(path: Path):
     return out
 
 
-def load_exclusion(paths):
+def load_exclusion(paths, arm_aware=False):
     """Prompt ids and response texts already used by an earlier labelled set.
 
     A judge prompt that has been revised after seeing its errors on set S can never be
-    honestly re-measured on S. Every later set must therefore exclude every earlier one, on
-    BOTH the prompt id and the response text, and the exclusion must be asserted rather than
-    assumed.
+    honestly re-measured on S. Every later set must therefore exclude every earlier one, and
+    the exclusion must be asserted rather than assumed.
+
+    Two exclusion keys, and the difference matters:
+
+    - RESPONSE TEXT, always global. This is the real leak guard: the unit of judge validation
+      is a (prompt, response) pair, and reusing a pair the judge was tuned against is exactly
+      what invalidates a kappa.
+    - PROMPT ID. By default also global, which is the strictest reading. With `arm_aware`,
+      the key becomes (arm, prompt id), so a *different arm's* response to an
+      already-used prompt stays eligible. That is defensible -- it is a different response,
+      and the judge is judging responses -- and it is sometimes necessary: with only 60
+      prompts per category, global prompt-id exclusion exhausts the pool after two sets.
+      The weaker guarantee is recorded in the output so it is never silently assumed.
     """
     ids, resps = set(), set()
     for p in paths:
@@ -65,10 +76,13 @@ def load_exclusion(paths):
             d = json.loads(line)
             n += 1
             if d.get("source_generation_id"):
-                ids.add(d["source_generation_id"])
+                ids.add((d.get("source_arm"), d["source_generation_id"]) if arm_aware
+                        else d["source_generation_id"])
             if d.get("response"):
                 resps.add(d["response"].strip())
         print(f"[independence] excluding {n} items from {p.name}")
+    print(f"[independence] prompt-id exclusion is {'ARM-AWARE (arm, id)' if arm_aware else 'GLOBAL (id)'}; "
+          f"response-text exclusion is always global")
     return ids, resps
 
 
@@ -99,6 +113,12 @@ def main():
                     help="Restrict to these categories (default: all five)")
     ap.add_argument("--per_cell_overrides", default=None,
                     help='JSON, e.g. {"crisis_adjacent": 12} -- per-category cell size')
+    ap.add_argument("--exclude_arm_aware", action="store_true",
+                    help="Exclude on (arm, prompt id) rather than prompt id alone, so another "
+                         "arm's response to an already-used prompt stays eligible. Response-text "
+                         "exclusion stays global either way. Needed once the 60-prompt-per-"
+                         "category pool is exhausted; the weaker guarantee is printed and must "
+                         "be recorded in the notebook.")
     ap.add_argument("--exclude", nargs="*", default=[],
                     help="Already-labelled JSONL sets whose prompt ids and response texts must "
                          "not reappear. The dev set is always excluded.")
@@ -128,7 +148,8 @@ def main():
         per_cell.update({k: int(v) for k, v in json.loads(args.per_cell_overrides).items()})
 
     # --- independence guard: everything any earlier labelled set touched ------------------
-    dev_prompt_ids, dev_responses = load_exclusion([DEV_SET] + list(args.exclude))
+    dev_prompt_ids, dev_responses = load_exclusion([DEV_SET] + list(args.exclude),
+                                                    arm_aware=args.exclude_arm_aware)
 
     gen_names = json.loads(args.generations_names) if args.generations_names else {}
     rng = random.Random(args.seed)
@@ -146,7 +167,7 @@ def main():
         for cat in cats:
             pool = sorted(by_cat.get(cat, []), key=lambda r: r["id"])
             pool = [g for g in pool
-                    if g["id"] not in dev_prompt_ids
+                    if ((arm, g["id"]) if args.exclude_arm_aware else g["id"]) not in dev_prompt_ids
                     and g["response_full_turn"].strip() not in dev_responses]
             k = per_cell[cat]
             if verdicts is None:
@@ -194,7 +215,8 @@ def main():
                 })
 
     # --- hard independence assertions ----------------------------------------------------
-    ids = {r["source_generation_id"] for r in rows}
+    ids = {((r["source_arm"], r["source_generation_id"]) if args.exclude_arm_aware
+            else r["source_generation_id"]) for r in rows}
     if ids & dev_prompt_ids:
         raise RuntimeError(f"OVERLAP with an excluded set: {sorted(ids & dev_prompt_ids)}")
     resps = {r["response"].strip() for r in rows}

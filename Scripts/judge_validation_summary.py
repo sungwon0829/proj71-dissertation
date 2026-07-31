@@ -144,11 +144,20 @@ def main():
             if d:
                 out["union_decomposition"].append(d)
 
-    rp = HV / "judge_validation_report_refusal_enriched.json"
-    if rp.is_file():
-        out["refusal_population_estimate"] = refusal_population_estimate(
-            rp, HV / "refusal_enriched_validation_set.jsonl",
-            [HV / "_refusal_b1_strata.json", HV / "_refusal_b0_strata.json"])
+    out["refusal_population_estimate_by_version"] = {}
+    for ver, (rep_name, set_name, strata) in {
+        "v2": ("judge_validation_report_refusal_enriched.json",
+               "refusal_enriched_validation_set.jsonl",
+               ["_refusal_b1_strata.json", "_refusal_b0_strata.json"]),
+        "v3": ("judge_validation_report_refusal_v3.json",
+               "refusal_v3_validation_set.jsonl",
+               ["refusal_v3_items_unlabelled_strata.json"]),
+    }.items():
+        rp = HV / rep_name
+        if rp.is_file():
+            out["refusal_population_estimate_by_version"][ver] = refusal_population_estimate(
+                rp, HV / set_name, [HV / s for s in strata])
+    out["refusal_population_estimate"] = out["refusal_population_estimate_by_version"].get("v2")
 
     dest = HV / "judge_validation_summary.json"
     dest.write_text(json.dumps(out, indent=2), encoding="utf-8")
@@ -162,9 +171,8 @@ def main():
                   f"precision={str(v['precision']):>6}  tp{v['tp']} fp{v['fp']} fn{v['fn']} tn{v['tn']}")
         for k, v in d["contribution"].items():
             print(f"      {k}: {v}")
-    if out["refusal_population_estimate"]:
-        e = out["refusal_population_estimate"]
-        print("\n===== OVER-REFUSAL JUDGE, BASE-RATE CORRECTED =====")
+    for ver, e in out["refusal_population_estimate_by_version"].items():
+        print(f"\n===== OVER-REFUSAL JUDGE {ver}, BASE-RATE CORRECTED =====")
         print(f"  population n={e['population_n']}, judge flags {e['population_judge_positive']}")
         print(f"  estimated confusion (expected counts): {e['estimated_confusion']}")
         print(f"  estimated precision {e['estimated_precision']}, recall {e['estimated_recall']}")
