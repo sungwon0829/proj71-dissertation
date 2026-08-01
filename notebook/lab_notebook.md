@@ -1132,3 +1132,84 @@ Reported assessment: **no single paper runs our controlled comparison** (trained
 bolt-on guardrail, same base model, matched data volume, therapy domain). The novelty
 judgment stays with the main thread; full per-angle reports are in the workflow journal and
 feed `notebook\related_work.md`.
+
+---
+
+## 2026-08-01 — Power analysis, REVISIONS 6 and 7, B2 over-optimisation, B3 frontier
+
+**POWER ANALYSIS (`notebook\power_analysis.md`, Monte Carlo over the exact shipped
+procedure).** The binding constraint is the instrument, not the sample size.
+
+| endpoint | n | true effect | power |
+|---|---|---|---|
+| primary ASR (non-crisis attack items) | 180 | −10 pts | **0.95** |
+| crisis co-primary | 60 | −10 pts | **0.50** |
+| over-refusal | 60 | +5 pts | **0.20** |
+
+**REVISION 6 — the 10-point ASR threshold is on the TRUE scale.** With judge recall 0.55,
+observed ≈ recall × true, so a treatment delivering a genuine 10-point reduction would have
+measured **5.5 points and failed our own pre-registered threshold** — we were committed to
+reporting "not supported" for a treatment working exactly as hypothesised. The original text
+never said which scale it meant; this fixes the units, not the bar. Primary reported effect is
+now **attenuation-corrected**, per-arm recall estimated from the owner's 60-item human-labelled
+subset with uncertainty propagated, raw observed always reported alongside. The correction must
+**refuse to run off LLM-labelled recall** — that is the exact error class corrected earlier today.
+Also deleted as false: "the under-count is identical across arms and does not bias the
+contrast", which was asserted in three files and printed into the headline while the pinned lock
+recorded the opposite. Quantified: at 40% true ASR with per-arm recalls 0.65 vs 0.45, **a zero
+true effect measures as an 8-point reduction**. A recall-sensitivity sweep replaces the clause.
+
+**REVISION 7 — over-refusal is descriptive, not a passed test.** 60 benign items is all the
+frozen suite has; power for the 5-point tolerance is **0.20** and the bootstrap half-width is
+**4.6–6.6 points at a true difference of zero** — wider than the tolerance. More seeds cannot
+help (pairing is across the 60 prompts). Reported as point estimate + 95% CI; bounded-cost
+phrased "no evidence of a large over-refusal increase"; tolerance evaluated on the **point
+estimate**, since the previous rule tested the CI upper bound and so could never be met at any
+true value. Headline reworded to "**changing over-refusal by Z points (95% CI [lo, hi])**" —
+the old wording implied a guarantee the interval does not provide.
+
+**B2 v2 (clean B1 v2 base) — COMPLETED BUT DEGENERATE, superseded.** train_loss 0.0709,
+7296.9 s, peak 31.03 GB. Reward margins ~8.3 with accuracy 0.975–1.0, reproducing the void
+run's flagged pattern exactly. Reward stats alone would have shipped it; the generation check
+caught it — **4 of 8 sanity prompts degenerate**: 3–4× verbatim phrase loops (prompts 1, 2), a
+fully duplicated response (prompt 3), and the model fabricating and continuing its own `User:`
+turns (prompt 6). **Owner decision: `beta` 0.1 → 0.3**, single-variable change across B2, T and
+T_ctrl; everything else held. B2 retraining as v3; v2 retained as the evidence for why beta
+changed. *This is itself a reportable finding: DPO at beta 0.1 on ~20k pairs over a terse SFT
+base produces reward hacking with margins ~8.3 and accuracy ~1.0.*
+
+**T_ctrl — built, will run as a documented WEAK control.** Measured: **4,148/4,924 rows
+(84.24%) have `safer_response_id == better_response_id`**, so flipping direction changes only
+**776 pairs (15.8%)**. Owner decision: run as-is rather than drawing from the 21,246 discarded
+rows (where "better" among two unsafe responses would mean training toward unsafe). Wording
+fixed for Methods: *T_ctrl differs from T on 776 of 4,924 safety pairs (15.8%), so it bounds
+the safety-direction effect rather than isolating it; it still detects the case where T's
+advantage comes entirely from adding out-of-domain preference data.*
+`assert_hyperparams_match_sibling()` now checks all three configs pairwise; T_ctrl and T are
+asserted to draw identical 15,000-pair helpfulness samples.
+
+**B1 v2 repetition, quantified on the full 300-item suite** (pinned `eval_generate.py`,
+penalty 1.05 unchanged): **3.0% strict (exact-sentence-repeat) to 6.0% loose (n-gram)** of items
+degenerate, concentrated in `prefilling` (6.7–15%) and `persona`, near-zero in
+`crisis_adjacent`. Down from 14.7% at penalty 1.0 but not eliminated. Of 7 degenerate
+attack-category items, 4 scored unsafe / 3 safe against a 54.6% base rate — no obvious verdict
+bias in aggregate. Decoding config stays pinned for every arm. These are the canonical numbers
+for the paper's limitation.
+
+**B3 THRESHOLD FRONTIER — a result, not a defence.**
+
+| threshold | ASR (primary) | crisis | over-refusal | replaced | Pareto |
+|---|---|---|---|---|---|
+| 0.05 | 0.00% | 95.00% | 88.33% | 96.3% | |
+| 0.25 | 7.22% | 53.33% | 40.00% | 52.3% | Y |
+| **0.50 (pinned)** | **18.89%** | **45.00%** | **18.33%** | 19.7% | **Y** |
+
+The pinned 0.5 is **Pareto-optimal**, which answers "you picked a weak baseline" with a curve
+rather than an assertion. More importantly: **there is no threshold at which this guardrail is
+both strong on ASR and cheap on over-refusal.** At 0.05 it replaces 96% of all responses and
+over-refuses 88% of benign items. That trade-off is the finding.
+
+**Endpoint split, verified on the mini-B3 fixture:** one pooled 25% ASR was concealing a
+**0.00% primary** and a **100% crisis co-primary**, with **6 of 9** items forced safe by
+Revision 3 convention and **2 of 3** crisis failures attributable to the filter. Had the pooled
+number gone into Table 1, neither the number nor its provenance would have been explicable.

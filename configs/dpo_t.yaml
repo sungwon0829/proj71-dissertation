@@ -21,10 +21,13 @@
 # no sampling id list is needed for M) are logged at run time to
 # results/T_dpo_seed<seed>/dpo_data_manifest.json.
 #
-# DO NOT LAUNCH YET -- draft only, per the coordinator's Task 2 instruction. learning_rate,
-# num_train_epochs, beta, loss_type and precompute_ref_log_probs below are proposed defaults
-# (literature-standard LoRA-DPO values, identical to dpo_b2.yaml so B2/T differ ONLY in data
-# composition, not in any other hyperparameter), not yet owner-confirmed.
+# Hyperparameters CONFIRMED by the coordinator 2026-07-31 (learning_rate, num_train_epochs,
+# beta, loss_type, precompute_ref_log_probs), with the binding requirement that they are
+# byte-identical across dpo_b2.yaml / dpo_t.yaml / dpo_t_ctrl.yaml -- asserted at startup
+# by scripts/train_dpo.py::assert_hyperparams_match_sibling(), not just documented.
+# Sequencing (coordinator, 2026-08-01): B2 seed 1 -> T seed 1 -> T_ctrl seed 1 -> remaining
+# seeds. Do not launch T until B2 seed 1 has finished AND its degeneracy/over-optimisation
+# check has been reported.
 
 model:
   name_or_path: Qwen/Qwen2.5-7B-Instruct
@@ -46,13 +49,28 @@ base_adapter:
   b1_checkpoint: checkpoint-290
 
 data:
-  # Both files use the TRL 1.9 DPOTrainer conversational schema (see scripts/prepare_pref.py).
+  arm: T   # identity label; allowed to differ across configs by design (see
+           # assert_hyperparams_match_sibling in scripts/train_dpo.py)
+  # Both pools use the TRL 1.9 DPOTrainer conversational schema (see scripts/prepare_pref.py).
   helpful_pool_source: psychocounsel_pref   # scripts/train_dpo.py calls
                                              # prepare_pref.build_helpful_pairs(seed, system_prompt,
                                              # exclude_safety_inversions=True) directly against the raw
                                              # dataset -- in-memory, not reading data/processed/pref_helpful.jsonl
                                              # -- so no shared processed file is regenerated/overwritten.
-  safety_pairs_file: data/processed/pref_safety.jsonl   # ALL 4,924 rows used (M = full file, no sampling).
+  # UPDATED 2026-08-01: safety pairs are now built IN-MEMORY by
+  # scripts/train_dpo.py calling prepare_pref.build_safety_pairs(seed, system_prompt,
+  # direction=safety_direction) directly against the raw PKU-SafeRLHF dataset -- same
+  # in-memory pattern as the helpful pool, and a structural (not just conventional)
+  # guarantee that T and T_ctrl draw from the SAME 4,924 selected PKU rows (row selection
+  # is identical between directions; see prepare_pref.py::_select_safety_contrast_rows).
+  # safety_pairs_file is kept only for schema/path parity and is NOT read.
+  safety_pairs_file: data/processed/pref_safety.jsonl   # NOT read -- see note above. ALL 4,924
+                                                          # rows from build_safety_pairs are used
+                                                          # (M = full pool, no sampling).
+  safety_direction: safer   # T's treatment: chosen = the response PKU annotators flagged
+                             # safe (safer_response_id). T_ctrl (configs/dpo_t_ctrl.yaml)
+                             # uses "better" (better_response_id, helpfulness) on the SAME
+                             # rows instead -- see Revision 5, notebook/preregistration.md.
   chat_template_path: configs/qwen25_chat_template_generation.jinja
   system_prompt_file: configs/system_prompt.txt
 
@@ -99,7 +117,11 @@ training:
   optim: adamw_torch          # plain torch AdamW -- no bitsandbytes on native Windows
   weight_decay: 0.0
   max_grad_norm: 1.0
-  beta: 0.1                   # PROPOSED (TRL's own default) -- identical to dpo_b2.yaml
+  beta: 0.3                   # RAISED from 0.1 -> 0.3, coordinator decision 2026-08-01 -- see
+                               # configs/dpo_b2.yaml's comment for the full reasoning
+                               # (B2 seed1 v2 reward-hacking degeneracy at beta=0.1). Identical
+                               # across dpo_b2.yaml / dpo_t.yaml / dpo_t_ctrl.yaml, asserted by
+                               # assert_hyperparams_match_sibling().
   loss_type: sigmoid          # PROPOSED (standard DPO loss) -- identical to dpo_b2.yaml
   label_smoothing: 0.0
   disable_dropout: true

@@ -1291,3 +1291,306 @@ all enforced in code and all recorded in `is_paper_number_inputs`:
    reproduce byte-identically that is a finding about our determinism claims and is reported
    immediately, not quietly re-run.
 4. Repetition pathology still parked pending train-runner's B1 v2 re-check.
+
+---
+---
+
+# PENDING (part 7) — eval harness, 2026-08-01 — audit response, items 1–3
+
+**Agent:** eval-harness.
+**New:** `scripts/migrate_label_provenance.py`, `scripts/dump_human_asr_worksheet.py`,
+`results/human_validation/LABEL_PROVENANCE_CORRECTION.md`.
+**Changed:** `scripts/eval_score.py`, `scripts/stats.py`, `configs/judges.yaml`,
+`configs/judges_pinned.lock.json`, all 25 validation artefacts.
+
+Responds to the adversarial pre-lock audit. Items 1–3 below; 4–6 to follow.
+
+## 1. LABEL PROVENANCE — the "human labels" were not human
+
+**The finding is correct and it is the most serious thing in the audit.** Every κ reported to
+date was measured against labels this agent produced, stored in a field named `human_label`.
+κ = 0.521 / 0.583 / 0.074 are **inter-model agreement** (a Qwen judge against a Claude
+labeller), not human agreement. Shared model biases plausibly inflate them, and CLAUDE.md
+safeguard 4 asks for a person. The field name is what caused it: code and prose both read
+`human_label` and inferred a human.
+
+**Migration.** `scripts/migrate_label_provenance.py` renamed `human_label` →
+`reference_label` across **25 files** and stamped `labeller_is_human: false` on every record,
+with `labeller` and a provenance note beside each label. It asserts per file that ids, order
+and label values are unchanged, and prints before/after SHA-256 for each.
+`LABEL_PROVENANCE_CORRECTION.md` records the whole thing.
+
+**Refusal to default.** `eval_score.py` now **raises** when `labeller_is_human` is absent from
+a validation record, when `_labeller_is_human` is absent from an over-refusal label file, and
+when `_labeller` is missing or still the `"FILL IN"` / `"UNRECORDED"` placeholder — the last
+of which it previously accepted silently. A validation set mixing human and LLM labellers also
+raises, because a single κ over both has no interpretable provenance.
+
+**Provenance travels with every κ.** `label_provenance` is computed per validation run and
+stamped onto every per-judge and per-category block (`agreement_type`:
+`inter_model` / `human_vs_judge`). The console prints
+`*** INTER-MODEL (LLM reference labeller) -- NOT human agreement ***` above the table. The
+pinned lock now carries `cohens_kappa_agreement_type` per judge; `judges.yaml`'s agreement
+table is retitled **"INTER-MODEL, NOT HUMAN"**.
+
+> **Re-pin note.** The lock was re-pinned the same day to add this provenance.
+> **Every `prompt_sha256` is byte-identical to the original pin** — the script asserts it —
+> so the *instruments* did not change; only the metadata saying who produced the reference
+> labels. `pin_lock_sha256` in `judges.yaml` was updated to match and `verify_judge_pin()`
+> re-verifies.
+
+**The owner's worksheet is built.** `scripts/dump_human_asr_worksheet.py` produced
+`results/human_validation/human_asr_worksheet.txt`: **60 items, 20 per attack category**,
+drawn from a pool of 213 eligible (arm, item) pairs after excluding **all four**
+prompt-tuning sets (dev, 100-item, heldout2, heldout3) on both (arm, id) and response text.
+
+- **Arm-masked.** No arm name and no suite id appears anywhere in the worksheet — verified by
+  grep (the only `arm` matches are a sofa arm in one item's text). The mapping back to
+  (arm, suite id) is in `human_asr_SEALED_KEY.json`, which the labeller is not given.
+- **Shuffled** with a recorded seed; category counts printed, **arm composition deliberately
+  not printed**.
+- **The definition is the judge's own text**, lifted verbatim from
+  `configs/behavioural_judge_prompt.txt`, so disagreement measures the judge rather than a
+  difference of definition.
+- `--unseal` joins the filled stub back through the key and writes a validation set ready for
+  `eval_score.py --calibrate`; it refuses if `_labeller_is_human` is absent.
+
+Both κ values will be reported side by side in Methods. **No old κ has been restated as
+human.**
+
+## 2. PRIMARY ENDPOINT — split, and the conventions made visible
+
+The audit is right that two deterministic rules were moving the pooled endpoint without any
+judge seeing the item, and that pooling `crisis_adjacent` with the attack categories averaged
+over **opposite refusal semantics** — a refusal scores 0 on one and 1 on the other.
+
+- **Primary endpoint is now the 180 non-crisis attack items**, one judge, one semantics
+  (`PRIMARY_ATTACK_CATEGORIES` in `stats.py`; `asr_primary_non_crisis` in every summary).
+- **`crisis_adjacent` is a declared co-primary** with its own rate, its own bootstrap CI, its
+  own test and its own `why_separate` statement, printed under a `CO-PRIMARY (reported
+  separately, never pooled)` heading.
+- The old pooled figure survives only as `asr_pooled_240_DEPRECATED` carrying a
+  **"DO NOT REPORT"** warning, so older scored files stay readable without the number being
+  quotable.
+- **The decomposition is promoted** from footnote to a reported primary quantity
+  (`table2_decomposition`, printed under Table 2).
+- **The arithmetic is now stated explicitly** in every summary
+  (`metrics.deterministic_rule_arithmetic`): the primary ASR as reported, the counterfactual
+  had the judge decided the filter-replaced items, the count forced safe by Revision 3, and
+  for crisis the number of failures attributable to the filter and the rate excluding them.
+
+Verified against real scored rows on the mini-B3 fixture:
+
+| quantity | value |
+|---|---|
+| primary (non-crisis), as reported | **0.00%** |
+| primary, if the judge had decided the replaced items | **22.22%** |
+| items forced safe by Revision 3 | 6 of 9 |
+| crisis co-primary, as reported | **100.00%** |
+| crisis failures attributable to the filter | **2 of 3** |
+| ~~pooled 240-item figure~~ | ~~25.00%~~ — deprecated |
+
+That single pooled 25% concealed both conventions at once. The counterfactual is labelled as a
+transparency figure, **not** an alternative result — the judge is documented to mis-score the
+pinned decline text, which is why Revision 3 exists.
+
+## 3. ESTIMATOR INCONSISTENCY — real bug, fixed
+
+Table 1's ASR was the mean of per-seed rates; the headline's X and Y came from a per-prompt
+**majority vote**, which maps p to 3p²−2p³ at three seeds and therefore shrinks each arm by a
+*different, p-dependent* amount. The paper would have printed two different numbers for the
+same quantity.
+
+**Fixed by switching the primary reduction to the per-prompt seed mean** (0, ⅓, ⅔, 1):
+
+- `mean over prompts of the seed mean == mean over seeds of the per-seed rate`, exactly, by
+  linearity. **Table 1 and the headline now agree by construction**, not by coincidence.
+- It also preserves within-prompt seed variation instead of discarding it: a prompt failing on
+  1 of 3 seeds is now distinguishable from one that never fails.
+- The primary test is a **two-sided paired permutation (sign-flip) test** on the per-prompt
+  differences — distribution-free and valid for non-binary outcomes, where McNemar is not.
+  20 000 permutations, seeded, with the +1 correction.
+- **Per-seed exact McNemar is retained as robustness**, where outcomes are genuinely binary.
+- `majority_vote()` is kept but marked RETIRED with the shrinkage arithmetic in its docstring.
+  **Only one estimator ships.**
+
+## 4. Partial credit on audit item 4 (the rest to follow)
+
+The false clause **"the under-count is identical across arms and does not bias the contrast"**
+was being *printed into the headline qualifier*, so it was deleted immediately rather than
+waiting for the power analysis. It contradicted our own pinned lock, which records that the
+judge under-counts terse arms. Replaced everywhere (`configs/judges.yaml` and `stats.py`) with:
+the observed effect is approximately recall × the true effect, recall is **not** known to be
+equal across arms, and the reader is pointed at `notebook/power_analysis.md`. The qualifier
+also now prints whether the κ behind it is human or inter-model.
+
+`notebook/power_analysis.md` itself, plus audit items 5 and 6, are **not yet done**.
+
+## 5. Verification status, honestly
+
+- Provenance migration: dry-run then applied, invariants asserted, spot-checked. **Verified.**
+- Human worksheet: built, blinding grep-verified, `--unseal` path written. **Verified except**
+  the unseal round-trip, which needs a filled stub.
+- `stats.py` restructure: run end to end on the synthetic B3/T fixture. **Verified.**
+- Deterministic arithmetic: recomputed against real scored rows. **Verified.**
+- `eval_score.py`'s new metric block: parses, and its arithmetic is verified independently —
+  but the **GPU-backed end-to-end re-score OOM'd against the running B2 DPO job**, so it has
+  not been executed in situ. I did not contend for the GPU. **Re-run when the GPU is free**;
+  this is the one item in this entry not confirmed by execution.
+
+## 6. Open
+
+1. `notebook/power_analysis.md` — MDE table for n=180 and n=60, exact-binomial McNemar power
+   at the pre-registered thresholds, recall-sensitivity sweep.
+2. Over-refusal worksheet unblinding (audit item 5), the per-seed `is_hand_labelled`
+   evaluation, and the point-estimate-vs-CI-upper-bound question for the 5-point criterion.
+3. B3 threshold sweep (audit item 6) — the full (ASR, over-refusal) frontier is post-processing
+   over the 14-category probability vectors `apply_b3_filter.py` already stores.
+4. Re-run `eval_score.py` end to end once the GPU frees.
+
+---
+---
+
+# PENDING (part 8) — eval harness, 2026-08-01 — audit items 4–6 and two corrections
+
+**New:** `scripts/power_analysis.py`, `scripts/b3_threshold_frontier.py`,
+`notebook/power_analysis.md`.
+**Changed:** `configs/judges_pinned.lock.json`, `configs/judges.yaml`, `scripts/stats.py`,
+`scripts/eval_score.py`, `scripts/dump_over_refusal_for_labelling.py`.
+
+## 1. Correction — stale pin provenance, and a guard against it
+
+The lock declared `preregistration_revisions_in_force: [1,2,3,4]` while Revision 5 existed.
+`verify_judge_pin()` now parses `preregistration.md` for `REVISION n` and **raises** unless the
+lock's list matches exactly — confirmed by running it against the stale lock before fixing it.
+A pin that does not name the protocol it was written under cannot be audited, and the failure
+mode is invisible in the output numbers, exactly like a stale adapter.
+
+Lock updated to `[1,2,3,4,5]`, `pin_lock_sha256` refreshed. **Every `prompt_sha256` is
+byte-identical** (asserted in the update script): Revision 5 changes the arms and the claim,
+not the instruments — T_ctrl is scored by the same pinned judges as everything else, which is
+the whole point of it.
+
+## 2. Correction — the 5-point tolerance applies to the POINT ESTIMATE
+
+The old rule reported `Z = max(0, bootstrap upper bound, across-seed upper bound)`. That is
+unmeetable: at n=60 benign prompts the bootstrap half-width alone exceeds 5 points **at a true
+difference of zero** (simulated: 4.6–6.6 pts depending on base rate — see
+`power_analysis.md` §4). A criterion a perfect result cannot satisfy is not a criterion.
+
+Now: `over_refusal_criterion.point_estimate_pts` tested against 5.0, with
+`ci95_bootstrap_over_prompts_pts` and the across-seed difference reported beside it. The
+headline sentence changed from *"increasing over-refusal by at most Z points"* to
+**"changing over-refusal by Z points (95% CI [lo, hi])"** — it no longer implies a guarantee
+the interval does not provide. A `precision_warning` fires automatically when the CI is wider
+than the tolerance it is being compared against, saying so in words.
+
+The criterion block was also **hoisted out of the `if not blockers` branch**, so the
+over-refusal difference and its interval are reported even when the sentence itself is
+blocked. A reader should not lose the metric because the sentence is unavailable.
+
+## 3. Item 4 — `notebook/power_analysis.md`
+
+Generated by `scripts/power_analysis.py` (Monte Carlo over the **exact shipped procedure** —
+per-prompt seed mean, two-sided sign-flip permutation, heterogeneous per-prompt probabilities
+— not a normal approximation). Re-run it to reproduce every figure.
+
+**Headline: we are underpowered for our pre-registered effect, and the binding constraint is
+the instrument, not the sample size.**
+
+| endpoint | n | baseline | true effect | power |
+|---|---|---|---|---|
+| primary ASR | 180 | 40% | −10 pts | **0.95** |
+| primary ASR | 180 | 40% | −18 pts | 1.00 |
+| crisis co-primary | 60 | 50% | −10 pts | **0.50** |
+| crisis co-primary | 60 | 50% | −20 pts | 0.98 |
+| over-refusal | 60 | 20% | +5 pts | **0.20** |
+
+Sample size is adequate for the primary. **Attenuation is not.** At recall 0.55 a true
+10-point reduction — our pre-registered minimum meaningful effect — is measured as **5.5
+points and fails our own threshold**. The threshold and the instrument are mutually
+inconsistent, and the file says so rather than working around it.
+
+The asymmetric case the audit raised is quantified: at 40% true ASR with arm recalls 0.65 vs
+0.45, **a zero true effect reads as an 8-point reduction** — most of our threshold,
+manufactured entirely by differential measurement. Revision 3 removes the largest known source
+(the judge no longer sees filter-replaced items at all); the remainder is unquantified and the
+only real fix is **per-arm** recall estimates from the human validation set.
+
+**The endpoint split raised the MDE and the file says so**: 240 pooled items → 180, so MDE
+rises by ~√(240/180) = 1.15×. Accepted knowingly — a well-powered test of an incoherent
+quantity is worth less than a slightly weaker test of a coherent one.
+
+Recommendation for the main thread, stated in the file: **restate the ASR threshold on the
+observed scale, or report attenuation-corrected effects with the recall CI propagated.** Doing
+neither leaves a threshold the instrument cannot deliver.
+
+`stats.py`'s module docstring — which still described McNemar-on-majority-vote as primary —
+was rewritten to match what now ships.
+
+## 4. Item 5 — merged, arm-masked over-refusal worksheet
+
+`--merge '{"tag": "path"}'` writes **one** worksheet across arms:
+`over_refusal_worksheet_MERGED.txt`, with no arm in the filename, header, item block or stub
+name, plus `over_refusal_MERGED_SEALED_KEY.json`. Same grep verification as the ASR worksheet:
+**0 arm-name matches, 0 suite-id matches.** Per-annotator stubs share the one worksheet so
+both annotators see the identical order.
+
+**The thing that cannot be masked, handled rather than hidden.** B3's guardrail substitutes a
+*fixed* decline, so those items identify themselves by their text. Three responses:
+
+1. The worksheet header **tells the labeller this will happen** and asks them not to infer
+   from it;
+2. those items are over-refusals **by construction**, so their label is not in doubt and the
+   blinding that matters is on the remaining items;
+3. the sealed key flags each one (`self_identifying`), so agreement can be reported
+   **separately** for self-identifying and genuinely masked items — which is the number that
+   actually tells us whether blinding held.
+
+On the fixture, 5/63 items were self-identifying and flagged.
+
+**`is_hand_labelled` is now evaluated per seed.** It was computed across all seeds while
+Revision 4 labels seed 1 only, so the headline blocker would have fired the moment seeds 2–3
+existed — blocking the sentence outright, the opposite of what Revision 4 intends. Now:
+`source_by_seed`, `hand_labelled_seeds`, `all_seeds_hand_labelled`, and a
+`mixed_provenance_note` warning that an across-seed mean **mixes two instruments** and must
+not be quoted as a hand-labelled figure.
+
+## 5. Item 6 — B3 threshold frontier
+
+`scripts/b3_threshold_frontier.py`. Pure post-processing over the 14-category probability
+vectors `apply_b3_filter.py` already stores; no model loaded, no judge re-run. Replaced items
+take their a-priori score (safe / failure / refusal by category); unreplaced items keep the
+underlying arm's own judge verdict from the scored file.
+
+Demonstrated on the smoke arm (B0 responses — shape only, not a paper number):
+
+| threshold | ASR (primary) | crisis | over-refusal | replaced | Pareto |
+|---|---|---|---|---|---|
+| 0.05 | 0.00% | 95.00% | 88.33% | 96.3% | . |
+| 0.10 | 0.00% | 85.00% | 65.00% | 84.7% | Y |
+| 0.25 | 7.22% | 53.33% | 40.00% | 52.3% | Y |
+| 0.40 | 16.11% | 48.33% | 28.33% | 29.7% | Y |
+| **0.50 (pinned)** | **18.89%** | **45.00%** | **18.33%** | 19.7% | **Y** |
+
+**The pinned 0.5 is Pareto-optimal**, and the curve answers "you picked a weak baseline"
+directly: lowering the threshold does buy ASR, at a brutal over-refusal price — at 0.05 the
+filter replaces 96% of everything and over-refusal hits 88%. There is no setting at which this
+guardrail is both strong on ASR and cheap on over-refusal; that trade-off *is* the finding.
+The pinned point is **not** changed by this analysis — `do_not_tune_after_seeing_results`
+stands.
+
+The script states its own limit: it cannot show what a judge would have said about a response
+a lower threshold would have replaced, because no such response exists — replacement
+substitutes a fixed string. That is a property of the arm, not an approximation.
+
+## 6. Not done
+
+**The GPU-backed end-to-end re-score is still outstanding.** `nvidia-smi` shows the B2 v2 DPO
+run holding the card; I did not contend with it. It remains the one item from the previous
+batch unconfirmed by execution, and it must be run before any real arm is scored.
+
+B0/B1 not regenerated, per instruction. B1 v2's checkpoint
+(`results\B1_sft_seed42_v2\checkpoint-290`) is noted for when the card frees; the archived B0
+(`7e2479150952c0be…`) is to be treated as a formal byte-identity reproducibility check and
+reported either way.

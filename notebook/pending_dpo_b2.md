@@ -427,3 +427,173 @@ generation) and that over-refusal for B3/T will be human-labelled rather than ju
 changes only what happens downstream of this DPO work -- nothing in `configs\dpo_b2.yaml`
 or `configs\dpo_t.yaml` needed to move, confirmed by inspection (both configs are entirely
 about training data/hyperparameters, not about the eval/filter/judge pipeline).
+
+---
+
+## 2026-08-01 -- B2 v2 completed; T_ctrl built (Revision 5); over-optimisation CONFIRMED; B1 v2 repetition quantified
+
+Read `notebook/preregistration.md` Revision 5 before touching any config, per instruction.
+
+### 1. B2 seed 1 (v2) completed
+
+`results\B2_dpo_seed1_v2\`: **1246/1246 steps, train_loss=0.0709, wall-clock 7296.9 s
+(~2h1.6m, contention-slowed vs the uncontended ~1h56m projection), peak VRAM 31.03 GB.**
+Remarkably close to the void v1 run (train_loss 0.0706, 7070 s, peak 31.03 GB) -- same
+hyperparameters, same data pipeline (only the base adapter's provenance differs), so this
+similarity is expected, not a red flag by itself.
+
+### 2. Over-optimisation verdict: YES, confirmed by generation quality, not just reward stats
+
+Final-step reward stats match the void run's flagged pattern almost exactly:
+`rewards/chosen=7.50, rewards/rejected=-0.82, rewards/margins=8.32`, and the preceding
+~10 logged steps sit at `rewards/accuracies=0.975-1.0` (e.g. `0.975, 1, 0.975, 0.975, 1,
+0.975, 1`). This reproduces the void run's flagged ~8.3-9.2 margin / ~1.0 accuracy pattern
+on the **clean** B1 v2 base with **identical, coordinator-confirmed hyperparameters**
+(lr=5e-6, beta=0.1, 1 epoch) -- so it is not attributable to the therapist-identity data
+issue.
+
+**Did not stop at the reward numbers** (which alone don't prove degenerate generation --
+high margins can also mean confident, correct learning). Ran a generation quality check:
+same 8 ESConv validation prompts as Gate 2 (seed 42), B2 v2's adapter vs the prior B1 v2
+baseline for direct comparison. Output:
+`results\B2_dpo_seed1_v2\degeneracy_check_generations.txt`.
+
+**Result: clear, verbatim degeneration in half the sample (4/8 prompts).**
+- **Prompt 1**: the exact clause "What is your biggest fear moving forward? We can work
+  on that too. I want you to know you are not alone and I believe in you. You are making
+  the right choices and I know you will succeed." repeats **4 times verbatim**, response
+  cut off by `max_new_tokens=256` mid-loop.
+- **Prompt 2**: "What do you think would be a good first step for you?" repeats 3 times;
+  "Let's focus on that and reward yourself for making progress." repeats twice.
+- **Prompt 3**: the **entire response is duplicated once, verbatim, back-to-back** --
+  same paragraph, word-for-word, twice.
+- **Prompt 6**: a different and arguably worse failure mode -- the model **fabricates and
+  continues fake `User:` turns**, inventing the other side of the conversation and then
+  replying to its own invented user message, rather than stopping after its own turn.
+- Prompts 4, 5, 7, 8: clean, coherent, no repetition, reasonable length.
+
+Separately, B2 v2 is also markedly more verbose than B1 v2 on the same prompts where it
+is *not* degenerate (e.g. prompt 4: 552 vs 143 chars; prompt 6 before the fake-turn
+collapse: much longer than B1's 74-char reply) -- consistent with helpfulness-DPO pushing
+toward PsychoCounsel's longer register, but the degenerate cases go well past "more
+thorough" into repetition/fabrication.
+
+**Verdict reported as requested, not decided unilaterally:** this looks over-optimised.
+**T has NOT been launched.** Per the coordinator's instruction, a beta/epoch change (if
+that is the fix chosen) must apply identically to B2, T and T_ctrl, and B2 would need
+redoing a third time -- that decision is left to the coordinator.
+
+### 3. T_ctrl (Revision 5) -- built, but flagging a weak-control risk BEFORE running it
+
+`scripts\prepare_pref.py`: refactored `build_safety_pairs()` into row-selection
+(`_select_safety_contrast_rows()`, unchanged relevance + exactly-one-safe filter) and a
+new `direction: "safer"|"better"` parameter controlling only which response is `chosen`
+for the SAME selected rows. Added `--direction better|safer` to the CLI
+(`--direction better` writes `data/processed/pref_safety_ctrl.jsonl`, never touches
+`pref_safety.jsonl`/`pref_helpful.jsonl`). **Default path (`--direction safer`, i.e. no
+flag) verified byte-identical**: recorded `pref_safety.jsonl` SHA-256
+(`7D759DDC015A0EB6AE0E04C46D38BA9F2DC508FD29E718B36F5403E9B436FE51`) and
+`pref_helpful.jsonl` SHA-256 (`98EDFC3581B9ED579AC4726AF64BAF7CE817EDAC486E8CE69A46AEC8E15D6CE1`)
+before touching the code; the new `direction="safer"` code path is the exact same logic
+as before (verified by direct comparison, not just re-running main() against the live
+files to avoid any risk to the shipped files).
+
+**Weak-control measurement (the coordinator's explicit ask, done before building anything
+further):** for all 4,924 selected PKU rows, compared `safer_response_id` (T's direction)
+against `better_response_id` (T_ctrl's direction) -- confirmed the code's
+is_response_X_safe-derived selection matches the literal `safer_response_id` field
+exactly (0/4,924 mismatches), so this is precisely the comparison the coordinator asked
+about. **Result: 4,148 of 4,924 rows (84.24%) have `safer_response_id ==
+better_response_id`** -- i.e. T_ctrl would train on the byte-identical chosen/rejected
+pair as T for 84% of its "safety-analogue" component.
+
+**This is a large fraction, flagged per instruction rather than acted on.** Did **not**
+draw contrast rows from the 21,246 discarded rows -- that alternative is not implemented,
+pending the coordinator's decision. `configs\dpo_t_ctrl.yaml` is otherwise complete and
+launch-ready (its top-of-file comment documents this finding prominently), so it can run
+as soon as the coordinator decides whether 84% overlap is acceptable, or whether the
+discarded-pool alternative should be built instead.
+
+**Config/script completeness (independent of the weak-control question):**
+- `configs\dpo_t_ctrl.yaml` written: identical hyperparameters to `dpo_b2.yaml`/
+  `dpo_t.yaml` (verified below), `data.arm: T_ctrl`, `data.safety_direction: better`,
+  `output_dir_template: results/T_ctrl_dpo_seed{seed}`.
+- `configs\dpo_b2.yaml` / `dpo_t.yaml` gained explicit `data.arm` (`B2`/`T`) and
+  `data.safety_direction` (`safer`) fields for schema parity and so the arm is never
+  inferred implicitly.
+- `scripts\train_dpo.py::assert_hyperparams_match_sibling()` extended to compare each
+  config against **both** other configs in the {B2, T, T_ctrl} trio (not just one
+  sibling), so no pairwise drift can slip through. Re-ran for all three configs: **all
+  three PASSED.**
+- Safety pairs are now built **in-memory** by `train_dpo.py` calling
+  `prepare_pref.build_safety_pairs(seed, system_prompt, direction=safety_direction)`
+  directly against the raw PKU-SafeRLHF dataset -- same in-memory pattern already used for
+  the helpful pool, and a **structural** (not just conventional) guarantee that T and
+  T_ctrl draw from the same 4,924 rows, since row selection does not depend on
+  `direction`. `dpo_t.yaml`/`dpo_t_ctrl.yaml`'s `safety_pairs_file` field is retained for
+  schema parity only and is no longer read.
+- Added a **T_ctrl/T helpful-sample match assert**: T_ctrl reads T's own
+  `dpo_data_manifest.json` (via `--t_output_dir` override if T wasn't written to the
+  default path) and hard-fails unless its 15,000 sampled helpful pair ids are **exactly**
+  identical to T's. Verified via a dry run (no GPU): built both pools with seed=1 and
+  confirmed the 15,000-id lists are byte-identical, as the shared-seed/shared-pool
+  determinism argument predicts -- not just trusted, checked.
+
+### 4. Repetition-penalty=1.05 quantified across the full 300-item frozen suite on B1 v2
+
+Per instruction, the decoding config stays pinned; this is measurement only. Reused
+`scripts\eval_generate.py` (the real harness script) against the pinned
+`configs\eval_generation.yaml`, full suite (`data\redteam\redteam_suite.jsonl`, SHA-256
+verified `e14c3a24...5b6689`), B1 v2 `checkpoint-290`. Generation: 466.3 s, peak VRAM
+15.09 GB, 2 empty continuations (noted, not yet separately investigated).
+Output: `results\B1_sft_seed42_v2\repetition_full_suite_generations.jsonl`.
+
+**Detector methodology, stated plainly (two detectors, since a single one undercounts):**
+- **Strict** (exact-sentence-repeat): any sentence >15 chars appearing >=3 times verbatim.
+  **9/300 (3.0%)** flagged: `prefilling` 4/60 (6.7%), `persona` 2/60 (3.3%),
+  `many_shot` 1/60 (1.7%), `benign_sensitive` 2/60 (3.3%), `crisis_adjacent` 0/60 (0.0%).
+- **Looser** (6-gram repeat fraction >=10% of all 6-grams in the response): **18/300
+  (6.0%)** flagged: `prefilling` 9/60, `persona` 4/60, `benign_sensitive` 4/60,
+  `many_shot` 1/60, `crisis_adjacent` 0/60.
+- **Caveat, stated honestly:** the strict detector misses lexically-varying templated
+  loops (the exact pattern found in the earlier 3-item spot check on `benign_sensitive_006`
+  -- a numbered list that free-runs on a fixed template while substituting the final
+  word). That specific item did **not** re-trigger in this run's batch composition
+  (516 chars, clean) -- greedy decoding is claimed batch-invariant by the harness's own
+  `--verify_batching` check, but this run did not pass that flag, so a batch-composition
+  sensitivity between the earlier 3-item run and this 300-item run cannot be ruled out.
+  This full-suite run is the authoritative number (real harness config, real suite,
+  representative batching), not the earlier spot check.
+- **Compared to repetition_penalty=1.0** (eval-harness's own measurement: 44/300, 14.7%):
+  **1.05 substantially reduces but does not eliminate** the pathology -- consistent with
+  the eval-harness track's own qualitative conclusion, now given a suite-wide number:
+  **3.0-6.0%** depending on detector strictness, concentrated in `prefilling` and
+  `persona`, essentially absent in `crisis_adjacent`.
+
+**Are degenerate outputs scored safe or unsafe? Cross-referenced with the real judges**
+(reused `scripts\eval_score.py`, same pinned judge configuration -- behavioural ASR judge,
+crisis judge, refusal judge -- not a new scorer). Of the 7 attack-category items flagged
+degenerate (strict detector): **4 scored unsafe, 3 scored safe** -- roughly proportional
+to the overall 131/240 (54.6%) attack-category unsafe base rate, so degenerate output is
+**not** obviously biasing the judge toward either verdict in aggregate (though individual
+cases plausibly go either way depending on what content the loop happens to contain
+before it repeats). Both flagged `benign_sensitive` degenerate items were scored
+`complied` (not a refusal) by the over-refusal judge. Full scored output:
+`results\B1_sft_seed42_v2\repetition_full_suite_scored.jsonl` /
+`repetition_full_suite_summary.json` (also yields, as a side effect, real B1 v2 numbers
+on the frozen suite: ASR 54.58% overall, by category `prefilling` 71.67%, `persona`
+31.67%, `many_shot` 50.00%, `crisis_adjacent` 65.00% -- **not marked as a paper number**
+by the harness itself, since helpfulness wasn't scored and this wasn't run as a
+designated per-arm scoring pass, but recorded here for reference since it fell out of
+this task for free).
+
+### 5. Sequencing status
+
+**T has NOT been launched.** Per the coordinator's explicit gate ("do not start T until
+B2 v2 finishes and you have run its degeneracy/over-optimisation check"), and given that
+check's result (over-optimised, confirmed by generation quality), launching T with the
+current hyperparameters would very likely reproduce the same degeneration, and a later
+hyperparameter fix would require redoing B2 again. Awaiting the coordinator's decision on
+beta/epochs before any further arm is trained. T_ctrl is additionally blocked on the
+84.24%-overlap weak-control question (§3). `configs\dpo_t.yaml` and
+`configs\dpo_t_ctrl.yaml` are both otherwise launch-ready.

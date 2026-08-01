@@ -1,0 +1,131 @@
+# Project 71 — T_ctrl config (DPO control arm: same PKU rows as T, helpfulness-direction
+# preference instead of safety-direction) — LoRA on top of the B1 checkpoint.
+#
+# Produces: the T_ctrl row referenced in notebook/preregistration.md Revision 5 (dated
+# 2026-08-01). Not one of the two headline arms (B3 vs T is still THE comparison) --
+# T_ctrl exists to isolate whether a T-vs-B3 gain is attributable to safety-specific
+# preference learning, or merely to the presence of ~25% out-of-domain preference data
+# inducing a diffuse caution prior. 1 seed only (coordinator's instruction).
+#
+# *** WEAK-CONTROL FINDING -- FLAGGED, NOT YET RESOLVED, DO NOT LAUNCH UNTIL THE
+# COORDINATOR HAS SEEN THIS AND DECIDED ***
+# scripts/prepare_pref.py::_select_safety_contrast_rows() was extended to compute, for
+# every one of the 4,924 PKU rows T and T_ctrl both draw from: does
+# `safer_response_id` (T's preference direction) equal `better_response_id` (T_ctrl's)?
+# Measured: **4,148 of 4,924 rows (84.24%) have safer_response_id == better_response_id**
+# -- i.e. T_ctrl would be trained on the IDENTICAL chosen/rejected pair as T for 84% of
+# its "safety-analogue" component. This is exactly the "large fraction -> weak control"
+# case the coordinator asked to be told about before proceeding, rather than deciding
+# unilaterally to draw contrast rows from the 21,246 rows the relevance/contrast filters
+# discarded. That alternative has NOT been implemented pending the coordinator's decision.
+# This config is otherwise complete and launch-ready (identical hyperparameters to
+# dpo_t.yaml, verified by assert_hyperparams_match_sibling), so it can be launched as soon
+# as the weak-control question is resolved one way or the other.
+#
+# THIS LORA ADAPTER CONFIG IS THE FIXED TEMPLATE FROM B1 (r=32/alpha=64/dropout=0.05, all
+# attention + MLP projections) -- byte-identical to configs/sft_lora.yaml's `lora:` block,
+# configs/dpo_b2.yaml's, and configs/dpo_t.yaml's. scripts/train_dpo.py asserts this
+# equality at startup and refuses to run if it drifts.
+#
+# MATCHED DATA VOLUME: same as T -- 15,000 helpfulness + 4,924 "safety-analogue" (here,
+# helpfulness-direction) pairs = 19,924 total, same optimiser steps as B2 and T.
+#   N (helpfulness pairs, this config)   = 15,000  (IDENTICAL sample to T's -- see below)
+#   M (PKU rows, this config)            = 4,924  (IDENTICAL rows to T's, direction="better")
+#   T_ctrl total                         = N + M = 19,924
+#
+# Hyperparameters CONFIRMED by the coordinator 2026-07-31, byte-identical to dpo_b2.yaml
+# and dpo_t.yaml except for arm/data-composition/safety_direction (asserted at startup).
+
+model:
+  name_or_path: Qwen/Qwen2.5-7B-Instruct
+  cache_dir: D:/hf_cache/hub   # NOTE: cache_dir is the hub-format root, not HF_HOME -- see sft_lora.yaml
+  dtype: bfloat16
+  attn_implementation: sdpa    # never flash-attn on Blackwell (unsettled per CLAUDE.md)
+  trust_remote_code: false
+
+# The B1 checkpoint this arm is built on top of (Gate 1 selection, fixed in advance,
+# recorded in notebook/lab_notebook.md and notebook/preregistration.md -- not revisited here).
+# results/B1_sft_seed42 (v1) is VOID (see dpo_t.yaml comment for the full incident); every
+# B2/T/T_ctrl run points at the clean retrain, results/B1_sft_seed42_v2/checkpoint-290.
+base_adapter:
+  b1_output_dir: results/B1_sft_seed42_v2
+  b1_checkpoint: checkpoint-290
+
+data:
+  arm: T_ctrl   # identity label; allowed to differ across configs by design (see
+                # assert_hyperparams_match_sibling in scripts/train_dpo.py)
+  # Both pools use the TRL 1.9 DPOTrainer conversational schema (see scripts/prepare_pref.py).
+  # IDENTICAL sample to T's: scripts/train_dpo.py calls
+  # prepare_pref.build_helpful_pairs(seed, system_prompt, exclude_safety_inversions=True)
+  # with the SAME seed as T, drawing from the SAME 33,596-row filtered pool -- since
+  # random.Random(seed).sample() over an identical pool with an identical seed is
+  # deterministic, this samples the IDENTICAL 15,000 pairs as T. Verified at launch time by
+  # comparing this run's sampled_helpful_pair_ids in dpo_data_manifest.json against T's.
+  helpful_pool_source: psychocounsel_pref
+  # Same PKU rows as T's safety pairs (structurally guaranteed: row selection in
+  # prepare_pref.build_safety_pairs() -- _select_safety_contrast_rows() -- does not depend
+  # on `direction`), but chosen/rejected assigned by better_response_id instead of
+  # safer_response_id. NOT read from a file -- built in-memory by
+  # prepare_pref.build_safety_pairs(seed, system_prompt, direction="better"), same pattern
+  # as T and B2's helpful pool.
+  safety_pairs_file: data/processed/pref_safety.jsonl   # NOT read -- present for schema/path
+                                                          # parity only, see note above.
+  safety_direction: better   # T_ctrl's control: chosen = response_{better_response_id}
+                              # (PKU's helpfulness annotation) on the SAME 4,924 rows T
+                              # uses, instead of safer_response_id. See Revision 5,
+                              # notebook/preregistration.md, and the weak-control finding
+                              # flagged at the top of this file.
+  chat_template_path: configs/qwen25_chat_template_generation.jinja
+  system_prompt_file: configs/system_prompt.txt
+
+  # Exclusion policy -- identical to dpo_b2.yaml / dpo_t.yaml.
+  exclude_safety_inversions: true
+
+  # Max-length policy -- identical reasoning and thresholds to dpo_b2.yaml / dpo_t.yaml.
+  max_length_policy: exclude
+  max_length: 2048
+
+  # MATCHED DATA VOLUME sampling target for this arm (see header comment). Same N/M as T.
+  n_helpful_sample: 15000
+  n_safety_sample: 4924
+
+lora:
+  r: 32
+  alpha: 64
+  dropout: 0.05
+  target_modules: [q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj]
+  bias: none
+  task_type: CAUSAL_LM
+
+training:
+  output_dir_template: "results/T_ctrl_dpo_seed{seed}"
+  num_train_epochs: 1
+  # Same 2x8 + gradient-checkpointing memory profile as B1's post-OOM-fix config, dpo_b2.yaml
+  # and dpo_t.yaml, not the original 4x4.
+  per_device_train_batch_size: 2
+  gradient_accumulation_steps: 8   # effective batch = 2 x 8 = 16
+  learning_rate: 5.0e-6       # identical to dpo_b2.yaml / dpo_t.yaml
+  lr_scheduler_type: cosine
+  warmup_ratio: 0.03
+  optim: adamw_torch          # plain torch AdamW -- no bitsandbytes on native Windows
+  weight_decay: 0.0
+  max_grad_norm: 1.0
+  beta: 0.3                   # RAISED from 0.1 -> 0.3, coordinator decision 2026-08-01 -- see
+                               # configs/dpo_b2.yaml's comment for the full reasoning. Identical
+                               # across dpo_b2.yaml / dpo_t.yaml / dpo_t_ctrl.yaml, asserted by
+                               # assert_hyperparams_match_sibling().
+  loss_type: sigmoid          # identical to dpo_b2.yaml / dpo_t.yaml
+  label_smoothing: 0.0
+  disable_dropout: true
+  precompute_ref_log_probs: true
+  precompute_ref_batch_size: 8
+  seed: 42
+  bf16: true
+  gradient_checkpointing: true
+  gradient_checkpointing_kwargs:
+    use_reentrant: false
+  dataloader_num_workers: 2
+  logging_steps: 5
+  save_strategy: epoch
+  report_to: []
+  train_sampling_strategy: random   # explicit, matches TRL's own default

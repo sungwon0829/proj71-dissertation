@@ -37,6 +37,7 @@ REDTEAM_DIR = REPO_ROOT / "data" / "redteam"
 SYSTEM_PROMPT_FILE = REPO_ROOT / "configs" / "system_prompt.txt"
 OUT_SAFETY = REPO_ROOT / "data" / "processed" / "pref_safety.jsonl"
 OUT_HELPFUL = REPO_ROOT / "data" / "processed" / "pref_helpful.jsonl"
+OUT_SAFETY_CTRL = REPO_ROOT / "data" / "processed" / "pref_safety_ctrl.jsonl"  # T_ctrl only
 TOKENIZER_NAME = "Qwen/Qwen2.5-7B-Instruct"
 MAX_LEN = 2048
 
@@ -130,12 +131,18 @@ def row_is_relevant(row) -> tuple[bool, bool, bool]:
     return category_hit, keyword_hit, (category_hit or keyword_hit)
 
 
-def build_safety_pairs(seed: int, system_prompt: str):
-    if not RAW_PKU_DIR.exists():
-        raise FileNotFoundError(f"Raw PKU-SafeRLHF data not found at {RAW_PKU_DIR}")
-    ds = load_from_disk(str(RAW_PKU_DIR))["train"]
-    n_input = len(ds)
+def _select_safety_contrast_rows(ds):
+    """Row-selection logic shared by both preference directions ("safer" and "better"):
+    the relevance filter (category/keyword union) plus the "exactly one response flagged
+    safe" genuine-contrast filter. This selection is IDENTICAL regardless of which
+    direction the resulting pairs use -- T_ctrl's control arm requires the *same* PKU rows
+    as T, only the chosen/rejected assignment differs (see build_safety_pairs).
 
+    Returns (contrast_rows, funnel) where contrast_rows is a list of dicts:
+        {"idx": PKU row index, "row": the row, "safe_idx": 0 or 1 (the safety-derived
+         chosen index), "better_idx": 0 or 1 (row["better_response_id"])}
+    """
+    n_input = len(ds)
     missing = REQUIRED_PKU_FIELDS - set(ds.column_names)
     if missing:
         raise ValueError(f"PKU-SafeRLHF schema missing expected fields: {missing}")
@@ -156,7 +163,7 @@ def build_safety_pairs(seed: int, system_prompt: str):
 
     both_safe = 0
     both_unsafe = 0
-    pairs = []
+    contrast_rows = []
     for i in relevant_idx:
         row = ds[i]
         s0, s1 = row["is_response_0_safe"], row["is_response_1_safe"]
@@ -169,31 +176,20 @@ def build_safety_pairs(seed: int, system_prompt: str):
             both_unsafe += 1
             continue
         # exactly one safe -> genuine safety contrast
-        if s0:
-            chosen_text, rejected_text = row["response_0"], row["response_1"]
-        else:
-            chosen_text, rejected_text = row["response_1"], row["response_0"]
-        if not chosen_text or not rejected_text or not row["prompt"]:
+        safe_idx = 0 if s0 else 1
+        better_idx = row["better_response_id"]
+        if better_idx not in (0, 1):
+            raise ValueError(f"Row {i}: better_response_id is not 0/1 ({better_idx!r}) -- malformed record")
+        if not row["prompt"] or not row["response_0"] or not row["response_1"]:
             raise ValueError(f"Row {i}: empty prompt/response text in a kept safety-contrast row")
-        pairs.append(
-            {
-                "prompt": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": row["prompt"]},
-                ],
-                "chosen": [{"role": "assistant", "content": chosen_text}],
-                "rejected": [{"role": "assistant", "content": rejected_text}],
-            }
-        )
-    n_contrast = len(pairs)
+        contrast_rows.append({"idx": i, "row": row, "safe_idx": safe_idx, "better_idx": better_idx})
+
+    n_contrast = len(contrast_rows)
     n_discarded_no_contrast = n_relevant - n_contrast
     assert n_discarded_no_contrast == both_safe + both_unsafe
 
-    rng_seed = seed
-    import random
-
-    rnd = random.Random(rng_seed)
-    rnd.shuffle(pairs)
+    n_same_direction = sum(1 for c in contrast_rows if c["safe_idx"] == c["better_idx"])
+    frac_same_direction = n_same_direction / n_contrast if n_contrast else None
 
     funnel = {
         "stage": "safety_pairs",
@@ -205,7 +201,60 @@ def build_safety_pairs(seed: int, system_prompt: str):
         "n_both_safe_discarded": both_safe,
         "n_both_unsafe_discarded": both_unsafe,
         "n_final_safety_contrast_pairs_M": n_contrast,
+        # T_ctrl weak-control diagnostic (coordinator's explicit request): how many of the
+        # selected rows have safer_response_id == better_response_id, i.e. would produce
+        # the IDENTICAL chosen/rejected pair under both preference directions. A large
+        # fraction here would make T_ctrl a weak control (T and T_ctrl would be trained on
+        # near-identical data despite the "different preference direction" framing).
+        "n_rows_where_safer_eq_better_direction": n_same_direction,
+        "frac_rows_where_safer_eq_better_direction": frac_same_direction,
     }
+    return contrast_rows, funnel
+
+
+def build_safety_pairs(seed: int, system_prompt: str, direction: str = "safer"):
+    """direction="safer" (default, unchanged behaviour): chosen = the response flagged
+    safe by is_response_*_safe -- this is what T trains on, and is byte-identical to the
+    pre-existing behaviour (verified by hash in main()).
+    direction="better": chosen = response_{better_response_id} (PKU's helpfulness
+    annotation) for the SAME selected rows -- this is T_ctrl's contrast arm. Row selection
+    (_select_safety_contrast_rows) is identical between directions by construction, so
+    "same 4,924 PKU rows, only the preference direction differs" is a structural
+    guarantee, not just a claim.
+    """
+    if direction not in ("safer", "better"):
+        raise ValueError(f"direction must be 'safer' or 'better', got {direction!r}")
+    if not RAW_PKU_DIR.exists():
+        raise FileNotFoundError(f"Raw PKU-SafeRLHF data not found at {RAW_PKU_DIR}")
+    ds = load_from_disk(str(RAW_PKU_DIR))["train"]
+
+    contrast_rows, funnel = _select_safety_contrast_rows(ds)
+    funnel = dict(funnel)  # copy so mutating below doesn't alias a shared dict
+    funnel["direction"] = direction
+
+    pairs = []
+    for c in contrast_rows:
+        row = c["row"]
+        chosen_idx = c["safe_idx"] if direction == "safer" else c["better_idx"]
+        rejected_idx = 1 - chosen_idx
+        chosen_text = row[f"response_{chosen_idx}"]
+        rejected_text = row[f"response_{rejected_idx}"]
+        pairs.append(
+            {
+                "prompt": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": row["prompt"]},
+                ],
+                "chosen": [{"role": "assistant", "content": chosen_text}],
+                "rejected": [{"role": "assistant", "content": rejected_text}],
+            }
+        )
+
+    import random
+
+    rnd = random.Random(seed)
+    rnd.shuffle(pairs)
+
     return pairs, funnel
 
 
@@ -393,11 +442,39 @@ def leakage_check(safety_prompts, redteam_dir: Path):
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--seed", type=int, required=True)
+    ap.add_argument(
+        "--direction",
+        type=str,
+        choices=["safer", "better"],
+        default="safer",
+        help="Preference direction for the PKU safety-contrast rows. 'safer' (default) is "
+        "the existing, unchanged behaviour: chosen = the response flagged safe -- writes "
+        "data/processed/pref_safety.jsonl exactly as before (byte-identical; verified by "
+        "hash, not just by code inspection). 'better' emits T_ctrl's control pairs on the "
+        "SAME rows with chosen = response_{better_response_id} instead, writing to a "
+        "separate file (data/processed/pref_safety_ctrl.jsonl) -- it never touches "
+        "pref_safety.jsonl or pref_helpful.jsonl.",
+    )
     args = ap.parse_args()
 
     system_prompt = load_system_prompt()
 
-    safety_pairs, safety_funnel = build_safety_pairs(args.seed, system_prompt)
+    if args.direction == "better":
+        safety_ctrl_pairs, safety_ctrl_funnel = build_safety_pairs(args.seed, system_prompt, direction="better")
+        write_jsonl(OUT_SAFETY_CTRL, safety_ctrl_pairs)
+        report = {
+            "seed": args.seed,
+            "direction": "better",
+            "safety_ctrl_funnel": safety_ctrl_funnel,
+            "out_safety_ctrl_path": str(OUT_SAFETY_CTRL),
+            "out_safety_ctrl_sha256": sha256_of_file(OUT_SAFETY_CTRL),
+            "note": "T_ctrl control pairs only -- pref_safety.jsonl and pref_helpful.jsonl "
+            "were not written or modified by this invocation.",
+        }
+        print(json.dumps(report, indent=2, ensure_ascii=False))
+        return
+
+    safety_pairs, safety_funnel = build_safety_pairs(args.seed, system_prompt, direction="safer")
     helpful_pairs, helpful_funnel = build_helpful_pairs(args.seed, system_prompt)
 
     write_jsonl(OUT_SAFETY, safety_pairs)

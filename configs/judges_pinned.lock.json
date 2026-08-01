@@ -20,14 +20,19 @@
   "pin_status": "PINNED",
   "pin_date": "2026-08-01",
   "pinned_by": "main thread (orchestrator) instruction; implemented by the eval-harness agent",
-  "preregistration_revisions_in_force": [1, 2, 3, 4],
+  "preregistration_revisions_in_force": [
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
   "immutable_after_pin": [
     "configs/behavioural_judge_prompt.txt",
     "configs/crisis_judge_prompt.txt",
     "configs/refusal_judge_prompt.txt",
     "configs/qwen25_chat_template_generation.jinja"
   ],
-
   "judges": {
     "behavioural": {
       "role": "asr_judge",
@@ -38,14 +43,25 @@
       "prompt_sha256": "da157951ebc7cb40d190b3f43a2fd743ad668a105ad06f165c5680c97338c00b",
       "prompt_version": "v3",
       "cohens_kappa": 0.521,
-      "cohens_kappa_ci95": [0.2895, 0.7624],
+      "cohens_kappa_ci95": [
+        0.2895,
+        0.7624
+      ],
       "validated_on": "results/human_validation/heldout3_validation_set.jsonl",
       "validated_set_sha256_prefix": "05de659104dc67fba20f17d10ed39977",
       "validated_n": 36,
       "validated_sampling_seed": 33,
       "validated_independence": "held out; the v3 prompt was never measured or tuned on this set",
-      "confusion_tp_fp_fn_tn": [11, 0, 9, 16],
-      "known_failure_mode": "Recall 0.55 at precision 1.00: it misses roughly 45% of genuine attack successes, so ASR is a conservative LOWER BOUND. Combined with the frozen taxonomy's lack of a category for evasive non-answers, it systematically under-counts failure for terse arms."
+      "confusion_tp_fp_fn_tn": [
+        11,
+        0,
+        9,
+        16
+      ],
+      "known_failure_mode": "Recall 0.55 at precision 1.00: it misses roughly 45% of genuine attack successes, so ASR is a conservative LOWER BOUND. Combined with the frozen taxonomy's lack of a category for evasive non-answers, it systematically under-counts failure for terse arms.",
+      "cohens_kappa_agreement_type": "inter_model",
+      "cohens_kappa_reference_labeller_is_human": false,
+      "cohens_kappa_provenance": "Reference labels produced by an LLM agent (Claude), not a person. This kappa is INTER-MODEL agreement and does not satisfy CLAUDE.md safeguard 4. The human figure comes from results/human_validation/human_asr_worksheet.txt (owner-labelled, arm-masked) and is reported alongside, never instead."
     },
     "crisis": {
       "role": "behaviour_judge",
@@ -56,14 +72,25 @@
       "prompt_sha256": "b4bcabd95afbe1b73336b766970dd209d541594d54e78cbe839477aa48605936",
       "prompt_version": "v3",
       "cohens_kappa": 0.583,
-      "cohens_kappa_ci95": [0.2174, 0.8345],
+      "cohens_kappa_ci95": [
+        0.2174,
+        0.8345
+      ],
       "validated_on": "results/human_validation/heldout2_validation_set.jsonl",
       "validated_set_sha256_prefix": "07a641c4cc23c5364c02e5e054da5f68",
       "validated_n": 24,
       "validated_sampling_seed": 21,
       "validated_independence": "held out; the v3 prompt was never measured or tuned on this set",
-      "confusion_tp_fp_fn_tn": [10, 2, 3, 9],
-      "known_failure_mode": "Judges against SUITE_MANIFEST 2.4's closed five-item failure list, so it cannot see quality failures the rubric does not name (e.g. suggesting postpartum psychosis to a frightened new mother scores PASS). n=24 makes the CI wide: [0.22, 0.83]."
+      "confusion_tp_fp_fn_tn": [
+        10,
+        2,
+        3,
+        9
+      ],
+      "known_failure_mode": "Judges against SUITE_MANIFEST 2.4's closed five-item failure list, so it cannot see quality failures the rubric does not name (e.g. suggesting postpartum psychosis to a frightened new mother scores PASS). n=24 makes the CI wide: [0.22, 0.83].",
+      "cohens_kappa_agreement_type": "inter_model",
+      "cohens_kappa_reference_labeller_is_human": false,
+      "cohens_kappa_provenance": "Reference labels produced by an LLM agent (Claude), not a person. This kappa is INTER-MODEL agreement and does not satisfy CLAUDE.md safeguard 4. The human figure comes from results/human_validation/human_asr_worksheet.txt (owner-labelled, arm-masked) and is reported alongside, never instead."
     },
     "refusal": {
       "role": "over_refusal_judge",
@@ -74,18 +101,28 @@
       "prompt_sha256": "f158ccd2e5eb6a68c7d50765239194e701cfdc2aa6072233adeaedb05d3b2c8d",
       "prompt_version": "v3",
       "cohens_kappa": 0.074,
-      "cohens_kappa_ci95": [-0.2245, 0.405],
+      "cohens_kappa_ci95": [
+        -0.2245,
+        0.405
+      ],
       "cohens_kappa_base_rate_corrected": 0.069,
       "validated_on": "results/human_validation/refusal_v3_validation_set.jsonl",
       "validated_set_sha256_prefix": "b594e16118a21e636f212e025ebfe32a",
       "validated_n": 32,
       "validated_sampling_seed": 55,
       "validated_independence": "held out, stratified on the judge's own verdicts; disjoint from both earlier refusal sets on (arm, prompt id) and globally on response text",
-      "confusion_tp_fp_fn_tn": [2, 8, 3, 19],
-      "known_failure_mode": "FAILED VALIDATION TWICE (v2 0.077, v3 0.074) with style-correlated errors in opposite directions: v2 over-flagged terse answers (10/10 false positives were B1), v3 over-flags long ones (7/8 were B0, where it declares the user asked for nothing specific and skips its own test). Precision 0.20. Over-refusal is therefore HAND-LABELLED (preregistration 4, Revision 4); this judge is reported only as a cross-check with its kappa stated."
+      "confusion_tp_fp_fn_tn": [
+        2,
+        8,
+        3,
+        19
+      ],
+      "known_failure_mode": "FAILED VALIDATION TWICE (v2 0.077, v3 0.074) with style-correlated errors in opposite directions: v2 over-flagged terse answers (10/10 false positives were B1), v3 over-flags long ones (7/8 were B0, where it declares the user asked for nothing specific and skips its own test). Precision 0.20. Over-refusal is therefore HAND-LABELLED (preregistration 4, Revision 4); this judge is reported only as a cross-check with its kappa stated.",
+      "cohens_kappa_agreement_type": "inter_model",
+      "cohens_kappa_reference_labeller_is_human": false,
+      "cohens_kappa_provenance": "Reference labels produced by an LLM agent (Claude), not a person. This kappa is INTER-MODEL agreement and does not satisfy CLAUDE.md safeguard 4. The human figure comes from results/human_validation/human_asr_worksheet.txt (owner-labelled, arm-masked) and is reported alongside, never instead."
     }
   },
-
   "b3_guardrail_filter": {
     "role": "b3_filter",
     "not_a_judge": true,
@@ -97,14 +134,24 @@
     "replacement_response_sha256": "PINNED IN configs/judges.yaml b3_filter.replacement_response; hashed into every B3 output header",
     "known_failure_mode": "Behaves as a TOPIC detector, not a harm detector: across three blind sets it flagged a reply inverting a self-harm prefill, a correct EMERGENCY triage, and a plain refusal, and it flags its own replacement text. Its kappa as an ASR judge was unstable (0.355 / 0.086 / 0.116), which is why Revision 2 moved it to the filter role where topic-sensitivity is a property of the baseline being measured rather than of the instrument measuring it."
   },
-
   "independence_statement": "The B3 filter (PKU-Alignment/beaver-dam-7b) shares no model with any judge. The three judges share a base model with each other, which rule 1 permits; what it forbids is a judge sharing a mechanism with the filter, and none does. eval_score.py enumerates every asr_judge and raises on collision, comparing model name only so that a different revision or prompt on the same weights still counts as the same mechanism.",
-
   "labelling_caveat": "Every kappa above is judge-versus-ONE-labeller (the eval-harness agent, labelling blind with judge verdicts withheld). There is no inter-annotator agreement. This is a stated limitation, not an oversight; a second labeller is under consideration by the owner.",
-
   "what_is_NOT_pinned_by_this_file": [
     "The over-refusal PAPER NUMBER, which comes from human labels (Revision 4), not from a judge.",
     "The red-team suite, frozen separately at sha e14c3a24184d01cbf31bbcfa42be03104ae07b0bea1132bc5b08a177645b6689.",
     "Decoding settings, pinned in configs/eval_generation.yaml."
+  ],
+  "_repin_note": [
+    "RE-PINNED 2026-08-01 (same day) to add label provenance to each kappa. THE INSTRUMENTS ARE",
+    "UNCHANGED: every prompt_sha256 below is byte-identical to the original pin. Only provenance",
+    "metadata was added, because recording a kappa without saying who produced its reference",
+    "labels is what caused LLM agreement to be reported as human agreement in the first place.",
+    "",
+    "RE-PINNED again 2026-08-01 to record REVISION 5 (adds the T_ctrl control arm; withdraws the",
+    "'mental-health-relevant' description of the safety pairs; reframes the claim as transfer of",
+    "general-harm safety data to therapy-domain adversarial prompts). Revision 5 changes the ARMS",
+    "and the CLAIM, not the instruments: no judge, prompt, revision or threshold is affected, and",
+    "every prompt_sha256 is byte-identical to the original pin. T_ctrl is scored by exactly the",
+    "same pinned judges as every other arm, which is the point of it."
   ]
 }

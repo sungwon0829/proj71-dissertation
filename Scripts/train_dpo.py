@@ -62,7 +62,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 from trl import DPOConfig, DPOTrainer
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from prepare_pref import build_helpful_pairs
+from prepare_pref import build_helpful_pairs, build_safety_pairs
 from prepare_sft import read_system_prompt
 from train_sft import assert_never_redteam  # reused, not duplicated (per Task 2 instruction)
 
@@ -112,73 +112,86 @@ def assert_lora_matches_b1_template(this_lora_cfg: dict, sft_config_path: str = 
     print("[lora fixed-template assert] PASSED: this config's lora: block matches configs/sft_lora.yaml exactly.")
 
 
-# Keys allowed to differ between dpo_b2.yaml and dpo_t.yaml -- everything else in these
-# sections must be byte-identical, or a B2-vs-T comparison is confounded by something other
-# than data composition.
+# Keys allowed to differ across dpo_b2.yaml / dpo_t.yaml / dpo_t_ctrl.yaml -- everything
+# else in these sections must be byte-identical, or a B2-vs-T-vs-T_ctrl comparison is
+# confounded by something other than data composition.
 _SIBLING_ALLOWED_TO_DIFFER = {
     ("training", "output_dir_template"),
     ("data", "n_helpful_sample"),
     ("data", "n_safety_sample"),
+    ("data", "arm"),
+    ("data", "safety_direction"),
 }
 _SIBLING_DATA_KEYS_MUST_MATCH = [
     "max_length", "max_length_policy", "exclude_safety_inversions",
     "chat_template_path", "system_prompt_file", "helpful_pool_source",
 ]
+_ALL_DPO_CONFIG_BASENAMES = ("dpo_b2.yaml", "dpo_t.yaml", "dpo_t_ctrl.yaml")
 
 
-def _sibling_config_path(this_config_path: str) -> str:
-    name = os.path.basename(this_config_path).lower()
+def _other_config_paths(this_config_path: str) -> list:
+    """Returns the paths of the other two configs in the {B2, T, T_ctrl} trio, in the same
+    directory as this_config_path."""
     directory = os.path.dirname(this_config_path)
-    if "dpo_b2" in name:
-        return os.path.join(directory, "dpo_t.yaml")
-    if "dpo_t" in name:
-        return os.path.join(directory, "dpo_b2.yaml")
-    raise RuntimeError(
-        f"Cannot determine the sibling config for {this_config_path!r} -- expected a "
-        "filename containing 'dpo_b2' or 'dpo_t'. Refusing to skip the hyperparameter-"
-        "match assertion silently."
-    )
+    this_base = os.path.basename(this_config_path).lower()
+    if this_base not in _ALL_DPO_CONFIG_BASENAMES:
+        raise RuntimeError(
+            f"Cannot determine sibling configs for {this_config_path!r} -- expected one of "
+            f"{_ALL_DPO_CONFIG_BASENAMES}. Refusing to skip the hyperparameter-match "
+            "assertion silently."
+        )
+    return [os.path.join(directory, b) for b in _ALL_DPO_CONFIG_BASENAMES if b != this_base]
 
 
 def assert_hyperparams_match_sibling(this_config_path: str, this_cfg: dict) -> None:
-    """B2 vs T is the whole experiment (CLAUDE.md's ONE CLAIM). Any hyperparameter
-    difference between the two configs other than data composition is a confound, not a
-    tuning choice -- so this is a hard startup gate, exactly like the LoRA fixed-template
-    assert, not a documentation convention that can silently drift."""
-    sibling_path = _sibling_config_path(this_config_path)
-    if not os.path.isfile(sibling_path):
-        raise FileNotFoundError(
-            f"Cannot verify B2/T hyperparameter equality: sibling config {sibling_path} not found. "
-            "Refusing to proceed without both configs present to compare."
-        )
-    sibling_cfg = load_config(sibling_path)
+    """B2 vs T (vs T_ctrl) is the whole experiment (CLAUDE.md's ONE CLAIM; T_ctrl added by
+    notebook/preregistration.md Revision 5). Any hyperparameter difference between the
+    three configs other than data composition is a confound, not a tuning choice -- so
+    this is a hard startup gate, exactly like the LoRA fixed-template assert, not a
+    documentation convention that can silently drift. Compares this config against BOTH
+    other configs in the {B2, T, T_ctrl} trio, so no pairwise drift (e.g. T_ctrl diverging
+    from B2 while still matching T) can slip through."""
+    other_paths = _other_config_paths(this_config_path)
+    all_mismatches = []
+    checked = []
+    for other_path in other_paths:
+        if not os.path.isfile(other_path):
+            raise FileNotFoundError(
+                f"Cannot verify hyperparameter equality: {other_path} not found. Refusing to "
+                "proceed without all three configs present to compare."
+            )
+        other_cfg = load_config(other_path)
 
-    mismatches = []
-    for section in ("model", "base_adapter", "lora", "training"):
-        this_section = this_cfg.get(section, {}) or {}
-        sib_section = sibling_cfg.get(section, {}) or {}
-        for key in set(this_section) | set(sib_section):
-            if (section, key) in _SIBLING_ALLOWED_TO_DIFFER:
-                continue
-            if this_section.get(key) != sib_section.get(key):
+        mismatches = []
+        for section in ("model", "base_adapter", "lora", "training"):
+            this_section = this_cfg.get(section, {}) or {}
+            other_section = other_cfg.get(section, {}) or {}
+            for key in set(this_section) | set(other_section):
+                if (section, key) in _SIBLING_ALLOWED_TO_DIFFER:
+                    continue
+                if this_section.get(key) != other_section.get(key):
+                    mismatches.append(
+                        f"{section}.{key}: this={this_section.get(key)!r} vs {other_path}={other_section.get(key)!r}"
+                    )
+        this_data = this_cfg.get("data", {}) or {}
+        other_data = other_cfg.get("data", {}) or {}
+        for key in _SIBLING_DATA_KEYS_MUST_MATCH:
+            if this_data.get(key) != other_data.get(key):
                 mismatches.append(
-                    f"{section}.{key}: this={this_section.get(key)!r} vs sibling={sib_section.get(key)!r}"
+                    f"data.{key}: this={this_data.get(key)!r} vs {other_path}={other_data.get(key)!r}"
                 )
-    this_data = this_cfg.get("data", {}) or {}
-    sib_data = sibling_cfg.get("data", {}) or {}
-    for key in _SIBLING_DATA_KEYS_MUST_MATCH:
-        if this_data.get(key) != sib_data.get(key):
-            mismatches.append(f"data.{key}: this={this_data.get(key)!r} vs sibling={sib_data.get(key)!r}")
+        all_mismatches.extend(mismatches)
+        checked.append(other_path)
 
-    if mismatches:
+    if all_mismatches:
         raise RuntimeError(
-            "B2/T HYPERPARAMETER-MATCH ASSERT FAILED: this config and "
-            f"{sibling_path} differ in fields other than data composition. Mismatches: "
-            f"{'; '.join(mismatches)}. Per the coordinator's binding requirement, any "
-            "hyperparameter difference between B2 and T (other than n_helpful_sample / "
-            "n_safety_sample / output_dir_template) is a confound. Refusing to proceed."
+            "HYPERPARAMETER-MATCH ASSERT FAILED across the {B2, T, T_ctrl} trio: "
+            f"{'; '.join(all_mismatches)}. Per the coordinator's binding requirement, any "
+            "hyperparameter difference between these configs (other than arm / "
+            "safety_direction / n_helpful_sample / n_safety_sample / output_dir_template) "
+            "is a confound. Refusing to proceed."
         )
-    print(f"[B2/T hyperparameter-match assert] PASSED: {this_config_path} matches {sibling_path} "
+    print(f"[hyperparameter-match assert] PASSED: {this_config_path} matches {checked} "
           "on every field except data composition.")
 
 
@@ -484,6 +497,14 @@ def main():
         "results/B2_dpo_seed1_v2 for a rerun on a retrained base adapter, without editing "
         "the canonical config or overwriting the prior run's directory).",
     )
+    parser.add_argument(
+        "--t_output_dir",
+        type=str,
+        default=None,
+        help="T_ctrl only: override where to look for T's dpo_data_manifest.json (default: "
+        "configs/dpo_t.yaml's own output_dir_template formatted with --seed). Needed only if "
+        "T was itself launched with a non-default --output_dir.",
+    )
     args = parser.parse_args()
 
     cfg = load_config(args.config)
@@ -498,7 +519,12 @@ def main():
     l_cfg = cfg["lora"]
     t_cfg = cfg["training"]
 
-    arm_name = "T" if d_cfg["n_safety_sample"] > 0 else "B2"
+    arm_name = d_cfg.get("arm")
+    if arm_name not in ("B2", "T", "T_ctrl"):
+        raise RuntimeError(
+            f"data.arm must be one of B2/T/T_ctrl in {args.config}, got {arm_name!r}. "
+            "Refusing to infer the arm implicitly."
+        )
     output_dir = args.output_dir if args.output_dir is not None else t_cfg["output_dir_template"].format(seed=seed)
     if os.path.isdir(output_dir):
         pre_existing = [f for f in os.listdir(output_dir) if not f.endswith(".log")]
@@ -552,13 +578,18 @@ def main():
     sampled_helpful = rng.sample(helpful_pool, n_helpful_needed)
     print(f"[sampled helpful] n={len(sampled_helpful)} (seed={seed}, from pool of {len(helpful_pool)})")
 
-    # ---- Safety pool (T only) ----------------------------------------------------------------
+    # ---- Safety pool (T / T_ctrl only): built in-memory from the raw PKU-SafeRLHF dataset,
+    #      never reading data/processed/pref_safety.jsonl -- see prepare_pref.build_safety_pairs
+    #      docstring. Row selection is IDENTICAL regardless of `safety_direction`, so T and
+    #      T_ctrl structurally draw from the same rows; only chosen/rejected differs. --------
     n_safety_needed = d_cfg["n_safety_sample"]
+    safety_direction = d_cfg.get("safety_direction", "safer")
     sampled_safety = []
     n_excl_length_safety = 0
+    safety_funnel = None
     if n_safety_needed > 0:
-        safety_pool = load_jsonl(d_cfg["safety_pairs_file"])
-        print(f"[safety pool] loaded {len(safety_pool)} rows from {d_cfg['safety_pairs_file']}")
+        safety_pool, safety_funnel = build_safety_pairs(seed=seed, system_prompt=system_prompt, direction=safety_direction)
+        print(f"[safety pool, direction={safety_direction}] {safety_funnel}")
         safety_pool, n_excl_length_safety = filter_by_max_length(
             safety_pool, tokenizer, d_cfg["max_length"], "safety"
         )
@@ -570,11 +601,43 @@ def main():
             sampled_safety = list(safety_pool)  # use all, still copy for a stable list
         else:
             sampled_safety = rng.sample(safety_pool, n_safety_needed)
-        print(f"[sampled safety] n={len(sampled_safety)} (seed={seed}, from pool of {len(safety_pool)})")
+        print(f"[sampled safety] n={len(sampled_safety)} (seed={seed}, direction={safety_direction}, "
+              f"from pool of {len(safety_pool)})")
 
     # ---- Matched-volume assertion (Methodological Safeguards v2, rule 2) ---------------------
     total_pairs = len(sampled_helpful) + len(sampled_safety)
     print(f"[matched volume] helpful={len(sampled_helpful)} safety={len(sampled_safety)} total={total_pairs}")
+
+    sampled_helpful_ids = [pair_id(p) for p in sampled_helpful]
+    sampled_safety_ids = [pair_id(p) for p in sampled_safety]
+
+    # ---- T_ctrl-specific check: its 15,000 helpfulness pairs must be the IDENTICAL sample
+    #      to T's (same seed, same pool -> deterministic, but verify empirically against T's
+    #      own manifest rather than just trusting the determinism argument) -----------------
+    if arm_name == "T_ctrl":
+        t_cfg_for_lookup = load_config(os.path.join(os.path.dirname(args.config), "dpo_t.yaml"))
+        t_output_dir = args.t_output_dir or t_cfg_for_lookup["training"]["output_dir_template"].format(seed=seed)
+        t_manifest_path = os.path.join(t_output_dir, "dpo_data_manifest.json")
+        if not os.path.isfile(t_manifest_path):
+            raise RuntimeError(
+                f"T_ctrl requires T's manifest to verify identical helpful-pair sampling, but "
+                f"{t_manifest_path} was not found. Run T seed {seed} first (per the coordinator's "
+                "sequencing: B2 -> T -> T_ctrl), or pass --t_output_dir explicitly if T was written "
+                "to a non-default directory. Refusing to proceed without this verification."
+            )
+        with open(t_manifest_path, "r", encoding="utf-8") as f:
+            t_manifest = json.load(f)
+        t_helpful_ids = t_manifest.get("sampled_helpful_pair_ids")
+        if t_helpful_ids != sampled_helpful_ids:
+            n_diff = len(set(t_helpful_ids or []) ^ set(sampled_helpful_ids))
+            raise RuntimeError(
+                f"T_CTRL/T HELPFUL-SAMPLE MATCH ASSERT FAILED: T_ctrl's sampled helpful pair ids do "
+                f"not exactly match T's ({t_manifest_path}). Symmetric-difference size: {n_diff}. "
+                "T_ctrl is defined as using the IDENTICAL 15,000 helpfulness pairs as T -- this must "
+                "not silently diverge. Refusing to proceed."
+            )
+        print(f"[T_ctrl/T helpful-sample match assert] PASSED: identical {len(sampled_helpful_ids)} "
+              f"helpful pair ids as {t_manifest_path}.")
 
     # ---- Manifest: log both counts + sampled pair ids, so a seed is reproducible from its
     #      config alone (Task 2 requirement) -----------------------------------------------
@@ -586,11 +649,13 @@ def main():
         "n_safety_sampled": len(sampled_safety),
         "total_pairs": total_pairs,
         "helpful_funnel": helpful_funnel,
+        "safety_direction": safety_direction if n_safety_needed > 0 else None,
+        "safety_funnel": safety_funnel,
         "n_excluded_helpful_by_max_length": n_excl_length_helpful,
         "n_excluded_safety_by_max_length": n_excl_length_safety,
         "max_length": d_cfg["max_length"],
-        "sampled_helpful_pair_ids": [pair_id(p) for p in sampled_helpful],
-        "sampled_safety_pair_ids": [pair_id(p) for p in sampled_safety],
+        "sampled_helpful_pair_ids": sampled_helpful_ids,
+        "sampled_safety_pair_ids": sampled_safety_ids,
     }
     manifest_path = os.path.join(output_dir, "dpo_data_manifest.json")
     with open(manifest_path, "w", encoding="utf-8") as f:

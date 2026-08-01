@@ -45,14 +45,17 @@ base_adapter:
   b1_checkpoint: checkpoint-290
 
 data:
-  # Both files use the TRL 1.9 DPOTrainer conversational schema (see scripts/prepare_pref.py).
+  arm: B2   # identity label; allowed to differ across configs by design (see
+            # assert_hyperparams_match_sibling in scripts/train_dpo.py)
+  # Both pools use the TRL 1.9 DPOTrainer conversational schema (see scripts/prepare_pref.py).
   helpful_pool_source: psychocounsel_pref   # scripts/train_dpo.py calls
                                              # prepare_pref.build_helpful_pairs(seed, system_prompt,
                                              # exclude_safety_inversions=True) directly against the raw
                                              # dataset -- in-memory, not reading data/processed/pref_helpful.jsonl
                                              # -- so no shared processed file is regenerated/overwritten.
-  safety_pairs_file: data/processed/pref_safety.jsonl   # not used by B2 (helpfulness-only); present for
-                                                          # schema/path parity with dpo_t.yaml.
+  safety_pairs_file: data/processed/pref_safety.jsonl   # not used by B2 (helpfulness-only, n_safety_sample=0);
+                                                          # present for schema/path parity with dpo_t*.yaml.
+  safety_direction: safer   # not used by B2 (n_safety_sample=0); present for schema parity only.
   chat_template_path: configs/qwen25_chat_template_generation.jinja
   system_prompt_file: configs/system_prompt.txt
 
@@ -110,7 +113,14 @@ training:
   optim: adamw_torch          # plain torch AdamW -- no bitsandbytes on native Windows
   weight_decay: 0.0
   max_grad_norm: 1.0
-  beta: 0.1                   # PROPOSED (TRL's own default) -- not owner-confirmed
+  beta: 0.3                   # RAISED from 0.1 -> 0.3, coordinator decision 2026-08-01, after
+                               # B2 seed1 v2 at beta=0.1 showed reward-hacking degeneracy
+                               # (margins ~8.3, accuracy ~1.0; 4/8 sanity prompts looped or
+                               # fabricated turns -- see results/B2_dpo_seed1_v2/README.md and
+                               # notebook/pending_dpo_b2.md). Single-variable change: every
+                               # other hyperparameter is unchanged so the diagnosis stays clean.
+                               # Identical across dpo_b2.yaml / dpo_t.yaml / dpo_t_ctrl.yaml,
+                               # asserted by assert_hyperparams_match_sibling().
   loss_type: sigmoid          # PROPOSED (standard DPO loss) -- not owner-confirmed
   label_smoothing: 0.0
   disable_dropout: true       # TRL default; explicit here for auditability
