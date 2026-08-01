@@ -1703,3 +1703,86 @@ Results must say so.
 **Consequence for the beta decision:** comparability of degeneracy *across arms* matters as much
 as its absolute level. Whatever configuration is accepted, B2, T and T_ctrl must degenerate at
 similar rates, or the difference contaminates the measured treatment effect.
+
+## 2026-08-01 — DPO degeneration: intervention plan and STOPPING RULE (recorded before the diagnostic returns)
+
+Produced by a parallel analysis (two literature searches + a diagnostic pass over our own
+training artefacts). **Recorded here before the B2 v2 diagnostic reports**, so the decision
+framework is pre-committed rather than fitted to whatever the numbers turn out to be — the same
+discipline as the pre-registration.
+
+**VERDICT: beta is the wrong lever. Stop pulling it.** Four grounds:
+1. **The driver is beta-invariant.** A **10.8x length shock** between B1's SFT targets (median
+   **24 tokens**) and the DPO chosen responses (median **264**). That is a data-composition
+   property; beta rescales the objective, it cannot change what the objective points at.
+2. **Beta is partly self-cancelling here.** `grad_norm` exceeds `max_grad_norm=1.0` on **61.0%**
+   of logged steps at beta 0.1 and **57.8%** at 0.3 — on most steps the update is renormalised
+   to 1.0 *regardless of beta*. Raising beta raised the pre-clip norm (2.65 -> 6.37), i.e. it
+   *increased* the fraction of steps where beta stops mattering.
+3. **Beta traded pathologies rather than removing them** (fabricated turns at 0.1, worse loops
+   at 0.3) — the signature of moving along an axis orthogonal to the fault.
+4. Each beta value costs 7.5 h (3 arms x 2.5 h); per-arm exploration is forbidden and is
+   machine-enforced by `assert_hyperparams_match_sibling()`.
+
+**MECHANISM: failure to terminate, not verbosity.** 23.7% of B2 v3 responses never emit EOS.
+**Cap-hit rate** (responses reaching exactly 512 tokens without EOS) is **97.2% predictive of
+degeneracy** in v3 and costs nothing to compute from files on disk — added to the diagnostic.
+**Zero items terminate in [384, 512)**, so a larger token budget would only buy longer loops.
+The loop begins after a *normal-length* answer (median 48 words vs 46 for clean items), which
+is why verbosity-targeted remedies are a poor fit.
+
+**LIKELIHOOD DISPLACEMENT: REFUTED BY OUR OWN DATA.** The literature rated it high-confidence
+and directly relevant, and recommended CHES filtering. Our logs refute it — `rewards/chosen` is
+**positive at 249/249 logged steps in both runs**. The diagnostic beats the analogy because it
+is our data rather than an argument from similarity. The displacement branch (CHES, DPOP and
+their remedies) is deleted from the plan. Two further literature suggestions also fail on our
+data: `label_smoothing`/`robust` presumes noisy labels, but there are **zero duplicate triples**
+and median chosen/rejected similarity is **0.108** — the pairs are trivially separable, which
+also explains the ~1.0 reward accuracies innocently; and Liu et al. (NAACL 2025) find
+degeneration *below* an optimal beta of 0.01–0.02 under full fine-tuning, the opposite sign and
+a different regime from ours.
+
+**RANKED INTERVENTIONS.**
+- **#1 NLL/SFT anchor (RPO-style):** `loss_type: [sigmoid, sft]`, `loss_weights: [1.0, 1.0]`,
+  plus one line wiring `loss_weights` into the `DPOConfig(...)` call. Verified against installed
+  TRL source (`dpo_trainer.py:1433` iterates `zip(self.loss_types, self.loss_weights)`; `:1542`
+  is the `sft` branch, cross-entropy over the **chosen** completion) and not blocked by
+  `precompute_ref_log_probs=True`. Restores a per-token gradient on the chosen response
+  *including its EOS token* — attacking the measured mechanism directly, where beta attacks
+  neither. **No pre-registration cost:** pair count unchanged, matched volume untouched, applied
+  identically by assert. Methods gains one sentence. **Mid-run abort rule:** the TRL `sft` term
+  is a token-mean CE (~1–2 nats) against a sigmoid term converging to ~0.06, so weight 1.0 makes
+  the anchor dominant — read `train.log` at step ~50 and kill it if `rewards/accuracies` stalls
+  below ~0.8, losing 10 minutes rather than 2.5 hours, then relaunch at `[1.0, 0.2]`.
+- **#2** `max_grad_norm: 1.0 -> 0.3` **or** `learning_rate: 5e-6 -> 2e-6` (one, not both). The
+  honest magnitude knob beta was pretending to be. No LoRA+7B precedent was found validating our
+  5e-6 (Zephyr 5e-7, Egida 1e-7, both full fine-tuning).
+- **#3** `loss_type: sigmoid_norm` — kills the sequence-summed length reward (longer wins 64.2%
+  of pairs), but makes beta per-token and so silently reopens beta as a tuning dimension.
+- **#4** `ld_alpha` (LD-DPO) — targets verbosity; our pathology is termination. Fallback only.
+
+**RULED OUT as comparability breakers, do not run:** any inference-side fix (truncate-at-repeat,
+stop strings, higher repetition penalty, larger `max_new_tokens`) — all violate the pinned
+decoding config, invalidate B0/B1 generations, and act **differentially by arm** (prefilling
+degenerates at 48.3% vs benign at 3.3%); dropping or down-weighting degenerate items at scoring
+time — changes the ASR denominator by a different amount per arm; any data filtering — changes
+the pre-registered 19,924 and has no pathology to remove.
+
+**SEQUENCE AND STOPPING RULE — binding.**
+1. **Today (~16 min):** measure B2 v2 (beta 0.1) on the full suite. If loose <= ~8% and
+   `has_fake_turn` = 0/300, revert beta to 0.1 across all three configs, retrain, stop.
+   Otherwise **beta is closed permanently** and we have a methodological sentence for the paper.
+2. **Attempt 1 (7.5 h):** the NLL/SFT anchor, beta held at whatever step 1 selects.
+3. **Attempt 2 (7.5 h), only if 1 fails:** `max_grad_norm: 0.3` layered on the best of the above.
+4. **Stop after attempt 2. No third configuration.**
+
+**ACCEPTANCE CRITERION — and it is not "low degeneration".** Absolute degeneration is a
+*limitation*; **differential** degeneration is a *confound*, and only the second is fatal.
+Accept a configuration when, across B2 / T / T_ctrl seed 1:
+**|loose(B2) - loose(T)| <= 3 points overall AND <= 5 points in every attack category.**
+Then report the residual rate, the EOS mechanism, the 8.6x attack-vs-benign concentration, and
+the per-arm x per-category degenerate-and-unsafe overlap table in Table 2's footnote.
+
+**HARD DATE: 8 AUGUST.** Seeds 2–3 need ~17.5 h of GPU before the 21 Aug results lock. If no
+configuration is accepted by 8 Aug, freeze the best one, run the seeds, and write the
+limitation. Week three is not to be spent here.
