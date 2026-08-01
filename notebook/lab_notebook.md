@@ -1213,3 +1213,64 @@ over-refuses 88% of benign items. That trade-off is the finding.
 **0.00% primary** and a **100% crisis co-primary**, with **6 of 9** items forced safe by
 Revision 3 convention and **2 of 3** crisis failures attributable to the filter. Had the pooled
 number gone into Table 1, neither the number nor its provenance would have been explicable.
+
+---
+
+## 2026-08-01 — NOVELTY JUDGMENT (main thread; lit-scout reported evidence, this is the call)
+
+Per CLAUDE.md the subagents report evidence and the main thread decides novelty. Four
+parallel searches ran (safety-DPO; guardrail-vs-trained-in; attack taxonomies and shallow
+alignment; therapy/mental-health LLM evaluation). Judgment recorded now, before results
+exist, so it cannot be retrofitted to whatever the numbers turn out to be.
+
+**Closest prior work.**
+- Dai et al., *Safe RLHF* (ICLR 2024) — decoupled helpfulness/harmlessness with a
+  Lagrangian-constrained objective. **Subsumes the generic idea** that safety preference data
+  can be optimised alongside helpfulness.
+- Qi et al., *Safety Alignment Should Be Made More Than Just a Few Tokens Deep* (ICLR 2025,
+  Outstanding Paper) — shallow alignment; directly explains why our `prefilling` category
+  works. **Overlaps** our mechanism, not our comparison.
+- Xin et al., *Jailbreaking Attacks vs. Content Safety Filters* (ACL Findings 2026) —
+  evaluates jailbreak ASR across the deployment pipeline including input/output filters.
+  **The nearest thing to our B3-vs-T contrast**; general-purpose domain, not a controlled
+  matched-volume training comparison.
+- Zhang et al., *Preference Learning Unlocks LLMs' Psycho-Counseling Skills* (ACL 2026) —
+  the source of our own PsychoCounsel data and reward model. **Neighbours**: preference
+  learning for counselling quality, not safety, and no adversarial evaluation.
+
+**What is NOT novel, stated plainly so the paper does not overclaim.**
+Mixing safety preference pairs into preference optimisation is established (Safe-RLHF and
+successors). Prefilling/many-shot/persona attacks are established. Shallow-alignment as the
+explanation for prefilling success is established. Using a moderation model as an output
+filter is established practice. None of these is our contribution and each must be cited as
+prior art in the Intro rather than in a defensive Related Work paragraph.
+
+**What remains novel, on the evidence.**
+1. A **controlled** comparison of trained-in safety against a bolt-on guardrail on the same
+   base model, with matched preference-pair volume (B2 = T = 19,924), an identical adapter
+   config, a frozen never-trained-on attack suite, and now a T_ctrl arm separating the
+   treatment from the mere presence of out-of-domain preference data. No search returned a
+   paper running this design.
+2. The domain: therapy/mental-health support, where the failure modes (`crisis_adjacent`) are
+   behavioural rather than content-based, and where a refusal — the guardrail's only move —
+   is *itself* a failure. Existing filter-vs-model work is general-purpose, where refusal is
+   an acceptable safe outcome. This is the substantive difference.
+
+**Note on how the contribution has shifted (honest, and important for the write-up).**
+Revision 5 narrowed the original framing: the safety pairs are 11.8% mental-health content,
+so the claim is now about **transfer** of general-harm safety preference data to
+therapy-domain attacks, not about therapy-specific safety data. That is a smaller claim.
+Meanwhile the guardrail-frontier work produced a *structural* result that may be stronger
+than the original headline: **crisis failure never drops below ~45% at any filter threshold**,
+because tightening the filter converts more crisis responses into a bare decline, and a bare
+decline to a user in crisis is itself a failure. A filter can remove harmful content; it
+cannot produce the correct response. That is a composition across a whole threshold sweep,
+not a difference of two noisy rates, and it reaches the same quantity as the Table 2
+filter-attributable decomposition by an independent route.
+
+**Consequence for risk.** If T_ctrl matches T, the headline claim is attributable to
+out-of-domain data rather than safety content and must be reported as such — but the crisis
+floor finding **survives regardless**, because it is a property of B3's structure and does not
+depend on T's advantage at all. The paper therefore has a result that does not rest on the
+experiment succeeding. That should shape the Intro's framing: lead with the controlled
+comparison, but do not stake the paper's contribution solely on T beating B3.

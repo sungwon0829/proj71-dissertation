@@ -1594,3 +1594,111 @@ B0/B1 not regenerated, per instruction. B1 v2's checkpoint
 (`results\B1_sft_seed42_v2\checkpoint-290`) is noted for when the card frees; the archived B0
 (`7e2479150952c0be…`) is to be treated as a formal byte-identity reproducibility check and
 reported either way.
+
+---
+---
+
+# PENDING (part 9) — eval harness, 2026-08-01 — Revisions 6 and 7 implemented
+
+**New:** `notebook/finding_guardrail_frontier.md`.
+**Changed:** `scripts/stats.py`, `configs/judges_pinned.lock.json`, `configs/judges.yaml`.
+
+## 1. Lock revision list — and the check earning its keep
+
+Before updating, I ran `verify_judge_pin()` against the now-stale lock. It **fired exactly as
+predicted**: `STALE PIN PROVENANCE: ... declares [1,2,3,4,5], but preregistration.md contains
+[1,2,3,4,5,6,7]`. That is the intended demonstration that the guard works on a real stale
+record rather than only on a synthetic one.
+
+Lock updated to `[1,2,3,4,5,6,7]`, `pin_lock_sha256` refreshed, **every `prompt_sha256`
+byte-identical** (asserted). Revisions 6 and 7 change how results are *reported*, not how they
+are *measured*, so no instrument moved.
+
+## 2. Revision 6 — attenuation correction is the primary reported effect
+
+`load_recall_estimates()` + `attenuation_correct()` in `stats.py`, wired through
+`--recall_estimates` (default `results/human_validation/asr_judge_recall_human.json`).
+
+- **Primary reported effect is the corrected one**, `true = observed / recall` per arm, with
+  the range taken **across each arm's 95% recall interval** rather than a point — because
+  n=60 human labels will not support a precise multiplier.
+- **The raw observed effect is always reported beside it**, in the JSON, in the console and in
+  the headline sentence.
+- **The correction refuses LLM-derived recall.** If the recall file reports
+  `labeller_is_human: false`, the correction is `REFUSED` with the reason printed, and the raw
+  observed effect is reported instead. Correcting the paper's headline number by a factor
+  derived from inter-model agreement would re-commit the exact error the provenance correction
+  was raised to fix, in the one number the paper leads with.
+- With no recall file at all: `PENDING`, raw observed reported, and the console states that
+  the pre-registered 10-point threshold is on the **true** scale so the raw figure must not be
+  compared against it.
+
+All three paths verified:
+
+| recall source | outcome |
+|---|---|
+| file absent | `PENDING -- report raw observed effect only` |
+| `labeller_is_human: false` | **`REFUSED -- LLM-derived recall`**, reason printed |
+| human, per-arm | `APPLIED`: corrected −74.07 pts, range [−111.11, −56.98], raw observed −44.44 pts |
+
+**A bound check I added while testing.** The synthetic case above returns a corrected range
+exceeding 100 points, which is impossible for a rate difference. `observed = recall × true`
+only holds while `recall × true ≤ 1`, and at the low end of a wide recall interval it stops
+holding. The tool now computes the implied true rates, flags any above 1.0, and emits a
+`bound_warning` telling the reader to treat the range as censored at 100 points and to lead
+with the raw observed effect. Better to say the model has been pushed past where it holds than
+to print an impossible number unremarked.
+
+The recall-sensitivity sweep stays prominent in `notebook/power_analysis.md` §1b.
+
+## 3. Revision 7 — over-refusal is descriptive
+
+- Headline wording adopted verbatim: **"changing over-refusal by Z points (95% CI [lo, hi])"**,
+  now inside a clause reading *"with no evidence of a large over-refusal increase"*. The words
+  "at most" are gone.
+- `over_refusal_criterion.reporting_stance` states in the output: *DESCRIPTIVE, NOT A PASSED
+  TEST. Phrase as 'no evidence of a large over-refusal increase', never as a criterion passed.*
+- `design_limitation_for_methods` is emitted in every summary, Methods-facing and explicit:
+  the design **cannot resolve** a 5-point over-refusal difference; power is 0.20 and the
+  bootstrap half-width is 4.6–6.6 points even at a true difference of zero. It states that
+  this follows from **the frozen suite containing 60 benign items, fixed at freeze time on
+  2026-07-31, not from any later analysis choice**, and that additional seeds cannot help
+  because pairing is across the 60 prompts so prompt-level n is fixed.
+- The precision warning still fires automatically whenever the interval exceeds the tolerance.
+
+## 4. The frontier, written up as a finding
+
+`notebook/finding_guardrail_frontier.md` — a Results item with the curve, not an appendix.
+The claim: **there is no threshold at which this guardrail is both strong on ASR and cheap on
+over-refusal.** Three things it establishes:
+
+1. Driving ASR to zero costs everything else — at threshold 0.05 the filter replaces 96% of
+   responses and over-refusal hits 88%. The arm reaches ASR 0 by ceasing to be a
+   therapy-support model, which is the degenerate solution the counter-metric exists to catch,
+   reached here by a *mechanism* rather than by a training failure.
+2. **Crisis failure never drops below ~45% at any threshold.** This is the structural result:
+   tightening the filter converts more crisis responses into the fixed decline, and a bare
+   refusal to a person in crisis is itself a failure under §2.4 limb (b). A filter can remove
+   harmful content; it cannot produce the correct response. **Tightening the guardrail cannot
+   improve crisis behaviour — it only trades one failure mode for another.**
+3. The pinned 0.5 is Pareto-optimal and is the least aggressive point on the sweep, i.e. the
+   one most favourable to over-refusal and least likely to flatter our treatment.
+
+That crisis floor is the same quantity as the filter-attributable share of the Table 2
+decomposition, arrived at independently — which is why it is the result most likely to survive
+scrutiny: it is a composition measured across a whole sweep, not a difference of two noisy
+rates.
+
+## 5. Arm status noted
+
+B2 v2 is **degenerate and superseded** (β 0.1 → 0.3, retraining as v3); nothing from it will be
+scored. T and T_ctrl follow B2 v3. T_ctrl will be reported as a **weak control** — it differs
+from T on 776 of 4,924 safety pairs (15.8%), so it bounds the safety-direction effect rather
+than isolating it, while still detecting the case where T's advantage comes entirely from
+out-of-domain data. Worth stating in Methods in exactly those terms, since a control that is
+weaker than it sounds is worse than no control.
+
+## 6. Outstanding
+
+**The GPU-backed end-to-end re-score.** The card is now on B2 v3; I am continuing to yield.
+It stays the one item unconfirmed by execution and must run before any real arm is scored.

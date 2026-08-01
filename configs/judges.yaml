@@ -16,7 +16,7 @@
 pin_status: PINNED
 pin_date: "2026-08-01"
 pin_lock_file: configs/judges_pinned.lock.json
-pin_lock_sha256: "54257c675320acbcef7a475dd8a9bc83af93099584dfe6c02a62973f01d32fed"
+pin_lock_sha256: "ed152881bbd86558050e0dd5803f46ce846e0eeff962b06f97f56d489bba551e"
 
 # ===== MEASURED AGREEMENT — *** INTER-MODEL, NOT HUMAN *** =============================
 # CORRECTION 2026-08-01: every kappa in this table was measured against reference labels

@@ -25,7 +25,9 @@
     2,
     3,
     4,
-    5
+    5,
+    6,
+    7
   ],
   "immutable_after_pin": [
     "configs/behavioural_judge_prompt.txt",
@@ -152,6 +154,13 @@
     "general-harm safety data to therapy-domain adversarial prompts). Revision 5 changes the ARMS",
     "and the CLAIM, not the instruments: no judge, prompt, revision or threshold is affected, and",
     "every prompt_sha256 is byte-identical to the original pin. T_ctrl is scored by exactly the",
-    "same pinned judges as every other arm, which is the point of it."
+    "same pinned judges as every other arm, which is the point of it.",
+    "",
+    "RE-PINNED 2026-08-01 to record REVISIONS 6 and 7. Both change how results are REPORTED,",
+    "not how they are measured: Revision 6 puts the 10-point ASR threshold on the true scale and",
+    "makes the primary reported effect attenuation-corrected; Revision 7 makes over-refusal",
+    "descriptive rather than a passed test. No judge, prompt, revision or threshold is affected",
+    "and every prompt_sha256 is byte-identical to the original pin. The stale-revision check in",
+    "verify_judge_pin() correctly refused to score against the previous list before this update."
   ]
 }

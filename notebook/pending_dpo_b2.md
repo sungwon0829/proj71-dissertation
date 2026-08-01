@@ -597,3 +597,83 @@ hyperparameter fix would require redoing B2 again. Awaiting the coordinator's de
 beta/epochs before any further arm is trained. T_ctrl is additionally blocked on the
 84.24%-overlap weak-control question (§3). `configs\dpo_t.yaml` and
 `configs\dpo_t_ctrl.yaml` are both otherwise launch-ready.
+
+**Repetition quantification -- canonical numbers for the paper (Methods/Limitations),
+as instructed:** on B1 v2, at the pinned decoding config (`repetition_penalty=1.05`,
+greedy, `max_new_tokens=512`), across the full frozen 300-item suite: **3.0% (strict
+exact-sentence-repeat detector, 9/300) to 6.0% (looser 6-gram-overlap detector, 18/300)**
+of items degenerate into repetitive/looping output, **concentrated in `prefilling` and
+`persona`** (strict: `prefilling` 6.7%, `persona` 3.3%; loose: `prefilling` 15.0%,
+`persona` 6.7%), **near-zero in `crisis_adjacent`** (0.0% under both detectors). This is
+**down from 14.7% (44/300) at `repetition_penalty=1.0`** (the eval-harness track's own
+measurement), so 1.05 substantially reduces but does not eliminate the pathology.
+Cross-referenced against the real pinned judges (not a new scorer): of the 7
+attack-category items flagged degenerate by the strict detector, **4 scored unsafe and 3
+scored safe** -- close to the overall 131/240 (54.6%) attack-category base rate, so
+degenerate output does **not** show an obvious systematic bias toward either verdict in
+aggregate. Decoding config stays pinned at 1.05 for every arm, as instructed; this is
+reported as a measured limitation, not remediated.
+
+---
+
+## 2026-08-01 -- Both decisions made by the coordinator; B2 v3 (beta=0.3) launched
+
+### Decision 1 -- raise beta 0.1 -> 0.3 in all three configs, single-variable change
+
+`configs\dpo_b2.yaml`, `configs\dpo_t.yaml`, `configs\dpo_t_ctrl.yaml`: `training.beta`
+changed `0.1` -> `0.3` in all three, identically, with a comment on each pointing back to
+the B2 v2 degeneracy finding. Every other hyperparameter (lr=5e-6, 1 epoch, cosine,
+sigmoid, `precompute_ref_log_probs=true`, 2x8 + gradient checkpointing, LoRA
+r=32/alpha=64/dropout=0.05 template) is byte-identical to before -- re-ran
+`assert_hyperparams_match_sibling()` for all three configs after the edit: **all three
+still PASS** (compared pairwise against both other configs in the trio, as extended
+earlier for Revision 5).
+
+**B2 seed 1 (v2) preserved, not deleted or overwritten.** Wrote
+`results\B2_dpo_seed1_v2\SUPERSEDED_README.txt` (distinct from the earlier
+`VOID_README.txt` convention used for the seed1/v1 run, since the reason differs):
+explicitly states v2 is superseded for a **hyperparameter** reason (reward-hacking
+degeneracy at beta=0.1), **not** a data-provenance reason -- its base adapter
+(`results/B1_sft_seed42_v2/checkpoint-290`, the clean, scrubbed B1) is fine. v2's reward
+stats and `degeneracy_check_generations.txt` are kept in place as the evidence trail for
+why beta changed; nothing in that directory was deleted.
+
+**GPU courtesy check, before launching, as instructed:** `nvidia-smi` showed 2 MiB / 0%
+(idle), confirmed stable over 3x20s checks before launching -- returning the courtesy the
+eval-harness agent has been extending.
+
+**Launched: B2 seed 1 (v3), beta=0.3, into a NEW directory
+`results\B2_dpo_seed1_v3\`** (v2 untouched). Detached (PID chain: launcher `cmd.exe`
+25516 -> shim `python.exe` 23324 -> real training process **PID 21316**). All startup
+gates re-ran and passed identically to v2 (LoRA template, 3-way hyperparameter match, data
+funnel -- 34,329 -> 33,667 -> 33,596 -> sampled 19,924 -- zero-truncation). Log:
+`results\B2_dpo_seed1_v3\train.log`. Per the sequenced instruction, the 8-prompt
+degeneracy check (same prompts, same seed 42, as v2's) will be run and reported **before
+anything else launches** -- T and T_ctrl remain un-launched pending that result.
+
+### Decision 2 -- T_ctrl runs as built; weak-control wording now also in the summary output
+
+`scripts\train_dpo.py`: added a `weak_control_note` field to `dpo_data_manifest.json`,
+computed **dynamically** from the run's own `safety_funnel` stats (not a hardcoded
+string, so it stays correct if anything upstream ever changes), populated only for
+`arm=="T_ctrl"`. Verified it renders to the coordinator's exact required wording
+(confirmed by direct computation before wiring it in):
+
+> "T_ctrl differs from T on 776 of 4,924 safety pairs (15.8%), so it bounds the
+> safety-direction effect rather than isolating it; it still detects the case where T's
+> advantage comes entirely from adding out-of-domain preference data."
+
+**This exact sentence is the wording to carry into Methods**, per instruction, and is
+recorded here verbatim (as instructed) in addition to living in the T_ctrl run's own
+`dpo_data_manifest.json` once T_ctrl actually runs. No rows are drawn from the 21,246
+discarded PKU rows -- per Decision 2, T_ctrl runs exactly as built (same 4,924 rows as T,
+`better_response_id` direction), reported as a weak/bounding control rather than a clean
+isolation of the safety-direction effect.
+
+### Sequencing (unchanged from the coordinator's instruction)
+
+B2 v3 (beta=0.3, running) -> 8-prompt degeneracy check, reported before anything else ->
+if clean: T seed 1 -> T_ctrl seed 1. If still degenerate: stop, report, do **not**
+unilaterally try beta=0.5 (a second change would confound the diagnosis). Will check
+`nvidia-smi` before every subsequent launch. Checkpoint paths for the eval-harness agent
+will be relayed by the coordinator, not pushed proactively.

@@ -639,6 +639,23 @@ def main():
         print(f"[T_ctrl/T helpful-sample match assert] PASSED: identical {len(sampled_helpful_ids)} "
               f"helpful pair ids as {t_manifest_path}.")
 
+    # ---- T_ctrl-specific: the weak-control finding (coordinator's Decision 2, 2026-08-01)
+    #      must survive into the summary output itself, not live only as a config comment,
+    #      with this exact wording (verbatim, so it can be copied straight into Methods). ---
+    weak_control_note = None
+    if arm_name == "T_ctrl" and safety_funnel is not None:
+        m_total = safety_funnel["n_final_safety_contrast_pairs_M"]
+        n_same = safety_funnel["n_rows_where_safer_eq_better_direction"]
+        n_diff = m_total - n_same
+        pct_diff = 100.0 * n_diff / m_total
+        weak_control_note = (
+            f"T_ctrl differs from T on {n_diff:,} of {m_total:,} safety pairs ({pct_diff:.1f}%), "
+            "so it bounds the safety-direction effect rather than isolating it; it still "
+            "detects the case where T's advantage comes entirely from adding out-of-domain "
+            "preference data."
+        )
+        print(f"[weak-control note] {weak_control_note}")
+
     # ---- Manifest: log both counts + sampled pair ids, so a seed is reproducible from its
     #      config alone (Task 2 requirement) -----------------------------------------------
     manifest = {
@@ -651,6 +668,7 @@ def main():
         "helpful_funnel": helpful_funnel,
         "safety_direction": safety_direction if n_safety_needed > 0 else None,
         "safety_funnel": safety_funnel,
+        "weak_control_note": weak_control_note,
         "n_excluded_helpful_by_max_length": n_excl_length_helpful,
         "n_excluded_safety_by_max_length": n_excl_length_safety,
         "max_length": d_cfg["max_length"],
