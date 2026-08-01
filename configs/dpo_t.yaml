@@ -117,12 +117,18 @@ training:
   optim: adamw_torch          # plain torch AdamW -- no bitsandbytes on native Windows
   weight_decay: 0.0
   max_grad_norm: 1.0
-  beta: 0.3                   # RAISED from 0.1 -> 0.3, coordinator decision 2026-08-01 -- see
-                               # configs/dpo_b2.yaml's comment for the full reasoning
-                               # (B2 seed1 v2 reward-hacking degeneracy at beta=0.1). Identical
-                               # across dpo_b2.yaml / dpo_t.yaml / dpo_t_ctrl.yaml, asserted by
-                               # assert_hyperparams_match_sibling().
-  loss_type: sigmoid          # PROPOSED (standard DPO loss) -- identical to dpo_b2.yaml
+  # BETA IS CLOSED, coordinator decision 2026-08-01 -- see configs/dpo_b2.yaml's comment for
+  # the full evidence trail (0.1 -> 0.3 -> matched full-suite check of both -> cap-hit rate
+  # statistically indistinguishable between the two betas, both ~4-5x B1 v2's baseline).
+  # Reverted to the ORIGINAL 0.1 so the NLL/SFT anchor below is the only change from the
+  # starting configuration. Identical across dpo_b2.yaml / dpo_t.yaml / dpo_t_ctrl.yaml,
+  # asserted by assert_hyperparams_match_sibling().
+  beta: 0.1
+  # NLL/SFT ANCHOR, attempt 1 -- identical to dpo_b2.yaml; see its comment for the full
+  # reasoning (trl 1.9.0 source verification, weight rationale, mid-run abort rule).
+  loss_type: [sigmoid, sft]
+  loss_weights: [1.0, 1.0]    # attempt 1; must change in all three configs together if the
+                               # mid-run abort rule fires (relaunch at [1.0, 0.2]).
   label_smoothing: 0.0
   disable_dropout: true
   precompute_ref_log_probs: true

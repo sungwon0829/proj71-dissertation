@@ -113,15 +113,44 @@ training:
   optim: adamw_torch          # plain torch AdamW -- no bitsandbytes on native Windows
   weight_decay: 0.0
   max_grad_norm: 1.0
-  beta: 0.3                   # RAISED from 0.1 -> 0.3, coordinator decision 2026-08-01, after
-                               # B2 seed1 v2 at beta=0.1 showed reward-hacking degeneracy
-                               # (margins ~8.3, accuracy ~1.0; 4/8 sanity prompts looped or
-                               # fabricated turns -- see results/B2_dpo_seed1_v2/README.md and
-                               # notebook/pending_dpo_b2.md). Single-variable change: every
-                               # other hyperparameter is unchanged so the diagnosis stays clean.
-                               # Identical across dpo_b2.yaml / dpo_t.yaml / dpo_t_ctrl.yaml,
-                               # asserted by assert_hyperparams_match_sibling().
-  loss_type: sigmoid          # PROPOSED (standard DPO loss) -- not owner-confirmed
+  # BETA IS CLOSED, coordinator decision 2026-08-01. Sequence: 0.1 (B2 v2) -> reward-hacking
+  # degeneracy (margins ~8.3, accuracy ~1.0; 4/8 sanity prompts) -> raised to 0.3 (B2 v3) ->
+  # full-suite quantification showed WORSE strict/loose degeneracy than beta=0.1, not better
+  # (14.3%/23.7% vs B1's 3.0%/6.0%) -> pre-committed stopping rule then required a matched
+  # full-suite check of beta=0.1 before reverting, which found 0.1 is not clean either
+  # (loose=21.3%, 6/300 fabricated turns, against the rule's own bar of <=~8% loose / 0
+  # fabricated). CLOSING NUMBER: cap-hit rate (fraction of responses reaching max_new_tokens
+  # without ever emitting EOS) is statistically indistinguishable between the two betas --
+  # 23.0% (0.1) vs 23.7% (0.3) -- while both sit 4-5x above B1 v2's 5.0% baseline. Beta is
+  # therefore not the lever; reverting to the ORIGINAL 0.1 so the NLL/SFT anchor below is the
+  # only change from the starting configuration (keeps the diagnosis single-variable). See
+  # notebook/pending_dpo_b2.md for the full evidence trail.
+  beta: 0.1
+  # NLL/SFT ANCHOR, attempt 1 (coordinator decision 2026-08-01): combine the standard sigmoid
+  # DPO loss with an SFT (cross-entropy over the CHOSEN completion only) anchor term, to
+  # counter the degeneration observed at every beta tried so far. Verified against the
+  # installed trl 1.9.0 source (trl/trainer/dpo_trainer.py) before relying on it:
+  #   - loss_type accepts a list (`__post_init__` coerces a bare str to a 1-item list);
+  #     losses are combined as `loss += per_sequence_loss.mean() * loss_weight` per
+  #     zip(loss_types, loss_weights, strict=True) -- so loss_weights MUST be the same length
+  #     as loss_type or DPOConfig raises at construction, not silently truncates/broadcasts.
+  #   - the "sft" branch (~line 1542) computes token-mean cross-entropy over `shift_logits`/
+  #     `shift_labels`/`shift_completion_mask` chunked to the chosen half of the batch; these
+  #     come from `outputs` = the POLICY model's own forward pass inside concatenated_forward,
+  #     not from `ref_outputs` -- so this term has no interaction with
+  #     precompute_ref_log_probs, which only controls how the REFERENCE log-probs are
+  #     obtained. completion_mask already implements assistant-only loss (prompt tokens
+  #     excluded), consistent with the project's SFT convention.
+  # Weight rationale: the sigmoid term converges to ~0.06 nats while the sft term is a
+  # token-mean cross-entropy (~1-2 nats), so loss_weights=[1.0, 1.0] makes the anchor
+  # dominant by construction, not by accident -- this is the intended "hold the policy near
+  # its SFT distribution" effect, not a bug. MID-RUN ABORT RULE: read train.log at ~step 50;
+  # if rewards/accuracies stalls below ~0.8, kill and relaunch at loss_weights=[1.0, 0.2].
+  loss_type: [sigmoid, sft]
+  loss_weights: [1.0, 1.0]    # attempt 1. If the mid-run abort rule fires, relaunch at
+                               # [1.0, 0.2] -- must change in dpo_b2.yaml / dpo_t.yaml /
+                               # dpo_t_ctrl.yaml together, asserted by
+                               # assert_hyperparams_match_sibling().
   label_smoothing: 0.0
   disable_dropout: true       # TRL default; explicit here for auditability
   precompute_ref_log_probs: true   # PROPOSED perf choice: with peft_config set and ref_model=None,

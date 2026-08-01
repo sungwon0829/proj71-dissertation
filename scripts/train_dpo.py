@@ -7,12 +7,25 @@ Produces: the B2 row (config: dpo_b2.yaml) or T row (config: dpo_t.yaml) in Tabl
 (via T) the ASR-per-category numbers in Table 2. B3 = B2 + guardrail filter at inference,
 so this script also produces the B3 baseline's underlying model.
 
-Hyperparameters (learning_rate, num_train_epochs, beta, loss_type, precompute_ref_log_probs,
-etc.) are CONFIRMED as of 2026-07-31, with one binding requirement: B2 and T must be
-byte-identical on every training/model/lora hyperparameter and never differ except in data
-composition (n_helpful_sample, n_safety_sample, output_dir_template). This is asserted at
-startup (assert_hyperparams_match_sibling), not just documented -- since B2-vs-T is the
-whole experiment, any other difference between the two configs is a confound.
+Hyperparameters (learning_rate, num_train_epochs, beta, loss_type, loss_weights,
+precompute_ref_log_probs, etc.) are CONFIRMED as of 2026-07-31, with one binding
+requirement: B2, T and T_ctrl must be byte-identical on every training/model/lora
+hyperparameter and never differ except in data composition (arm, n_helpful_sample,
+n_safety_sample, output_dir_template, safety_direction). This is asserted at startup
+(assert_hyperparams_match_sibling, checked pairwise against BOTH other configs in the
+trio), not just documented -- since B2-vs-T(-vs-T_ctrl) is the whole experiment, any other
+difference between the configs is a confound.
+
+UPDATED 2026-08-01 (attempt 1, NLL/SFT anchor): loss_type is now a list (["sigmoid",
+"sft"]) with a matching loss_weights list, per the coordinator's pre-committed plan to
+combat DPO-induced degeneration (cap-hit rate ~4-5x B1's baseline at both beta=0.1 and
+beta=0.3; beta is closed as a tuning dimension -- see notebook/pending_dpo_b2.md). The
+"sft" loss_type applies token-mean cross-entropy over the CHOSEN completion only, using the
+policy model's own forward-pass logits (verified in the installed trl 1.9.0 source,
+dpo_trainer.py ~line 1542-1549: `shift_logits`/`shift_labels`/`shift_completion_mask` come
+from `outputs` = the policy's own concatenated_forward, not the reference model's
+`ref_outputs`) -- so it has no interaction with precompute_ref_log_probs, which only
+governs how the REFERENCE log-probs are obtained.
 
 Continuation semantics (the correctness-critical part): B2/T are "B1 + DPO", not "base +
 fresh-DPO-LoRA". The B1 LoRA checkpoint is loaded via
@@ -753,6 +766,12 @@ def main():
         max_grad_norm=t_cfg["max_grad_norm"],
         beta=t_cfg["beta"],
         loss_type=t_cfg["loss_type"],
+        # loss_weights: None (DPOConfig's own default -> equal 1.0 weights) unless the
+        # config declares one. Verified against installed trl 1.9.0 source
+        # (trl/trainer/dpo_config.py __post_init__): loss_type is coerced str->list, and
+        # loss_weights must then have the same length as loss_type or DPOConfig raises at
+        # construction time -- so a length mismatch here fails loudly, not silently.
+        loss_weights=t_cfg.get("loss_weights"),
         label_smoothing=t_cfg["label_smoothing"],
         disable_dropout=t_cfg["disable_dropout"],
         precompute_ref_log_probs=t_cfg["precompute_ref_log_probs"],
