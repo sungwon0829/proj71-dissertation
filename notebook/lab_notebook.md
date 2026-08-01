@@ -1502,3 +1502,41 @@ insertion, orphaning the Helpfulness row below the Revision 6/7 blocks. Row rest
 table; the Success criterion beneath it rewritten to match Revisions 6 and 7 rather than the
 superseded original wording (it still said "over-refusal increase <= 5 points" as a hard
 success condition, which Revision 7 had already replaced).
+
+## 2026-08-01 — Config-seed reproducibility defect fixed and independently verified
+
+**Defect.** `configs\dpo_b2.yaml` and `dpo_t.yaml` declared `seed: 42` while runs launched with
+`--seed 1`. Code inspection showed the config field was **never read at all** — the scripts
+always built the trainer config from the CLI seed — so it was dead, misleading text rather than
+a live override. Either way it violates CLAUDE.md's requirement that a run be reproducible from
+its config alone: a peer reproducing B2 seed 1 from the config would have got seed 42, and since
+the seed also selects which 15,000 helpfulness pairs are sampled, that is a different training
+set, not merely different initialisation. It would have failed silently.
+
+**Fix.** The `seed:` field was removed from **all four** shared configs — `sft_lora.yaml`,
+`dpo_b2.yaml`, `dpo_t.yaml`, `dpo_t_ctrl.yaml` (`sft_lora.yaml` carried the identical dormant
+bug and was not among the two flagged). `--seed` is now the sole source of truth, and the
+resolved seed is written into each run's own output manifest (`dpo_data_manifest.json`, and a
+new `sft_run_manifest.json` for SFT). `assert_no_config_seed()` is defined once in
+`train_sft.py` and imported by `train_dpo.py`, and hard-fails at startup if a `seed` key is ever
+reintroduced into a shared config's `training:` block.
+
+**Independently verified in the main thread** (not accepted on report):
+- All four shipped configs pass the guard: no `seed` key remains anywhere in `configs\*.yaml`.
+- Injecting `training.seed = 99` makes the guard raise, with the intended message.
+- B2 v3's in-flight run is unaffected — it used `--seed 1` correctly throughout; this was a
+  documentation/reproducibility risk, not a functional bug in that run.
+
+**A note on the verification itself, because it is instructive.** My first check of this guard
+reported "GUARD DID NOT FIRE" — but the test was wrong, not the guard: `assert_no_config_seed`
+takes the *training block*, and I had passed the whole config, so it looked for a top-level
+`seed` that was never there. Corrected and re-run, the guard behaves exactly as specified. Worth
+recording because the project has spent two days correcting numbers that were asserted rather
+than checked, and a *failed* verification deserves the same scrutiny as a passing one — a
+false alarm reported as a defect would have been the same error in the opposite direction.
+
+**T_ctrl weak-control wording is now emitted in the run summary**, computed from the run's own
+funnel statistics rather than hardcoded, so it cannot drift from the data:
+"T_ctrl differs from T on 776 of 4,924 safety pairs (15.8%), so it bounds the safety-direction
+effect rather than isolating it; it still detects the case where T's advantage comes entirely
+from adding out-of-domain preference data."

@@ -129,7 +129,18 @@ training:
                                     # forward pass; precomputing them once up front (rather than every
                                     # step) roughly halves the forward-pass cost per training step.
   precompute_ref_batch_size: 8
-  seed: 42
+  # NO seed field here, deliberately. This config is shared across seeds 1/2/3 (B2 is a
+  # 3-seed arm) -- a fixed value here would be dead code at best (it was never actually
+  # read: scripts/train_dpo.py always builds DPOConfig(seed=<CLI --seed>, ...), never
+  # t_cfg["seed"]) and a silent-reproducibility trap at worst (a peer reproducing from
+  # this file alone, by reading YAML rather than the script, would get a DIFFERENT seed
+  # than the one actually used -- found by the eval-harness track 2026-08-01 while fixing
+  # the seed record; B2 seed 1 was launched with --seed 1 while this field said 42).
+  # --seed on the command line is the sole source of truth; scripts/train_dpo.py asserts
+  # at startup that this config does NOT declare a "seed" key (fails loudly if one is
+  # reintroduced), and writes the resolved seed into
+  # results/<arm>_dpo_seed<seed>/dpo_data_manifest.json so every run's artefact records
+  # its own actual seed unambiguously.
   bf16: true
   gradient_checkpointing: true
   gradient_checkpointing_kwargs:

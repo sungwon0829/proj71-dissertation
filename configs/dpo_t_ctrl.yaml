@@ -119,7 +119,11 @@ training:
   disable_dropout: true
   precompute_ref_log_probs: true
   precompute_ref_batch_size: 8
-  seed: 42
+  # NO seed field here, deliberately -- see configs/dpo_b2.yaml's comment for the full
+  # reasoning. --seed on the command line is the sole source of truth. T_ctrl is a
+  # single-seed arm (seed 1 only, paired with T seed 1 -- see
+  # notebook/preregistration.md); the resolved seed is written into
+  # results/T_ctrl_dpo_seed<seed>/dpo_data_manifest.json.
   bf16: true
   gradient_checkpointing: true
   gradient_checkpointing_kwargs:

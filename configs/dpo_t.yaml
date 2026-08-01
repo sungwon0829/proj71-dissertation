@@ -127,7 +127,12 @@ training:
   disable_dropout: true
   precompute_ref_log_probs: true
   precompute_ref_batch_size: 8
-  seed: 42
+  # NO seed field here, deliberately -- see configs/dpo_b2.yaml's comment for the full
+  # reasoning (reproducibility defect found by the eval-harness track 2026-08-01: this
+  # field was dead code, never read by scripts/train_dpo.py, and silently misleading).
+  # --seed on the command line is the sole source of truth for this 3-seed arm (T seeds
+  # 1/2/3); the resolved seed is written into
+  # results/T_dpo_seed<seed>/dpo_data_manifest.json.
   bf16: true
   gradient_checkpointing: true
   gradient_checkpointing_kwargs:

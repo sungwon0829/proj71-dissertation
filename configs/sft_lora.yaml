@@ -55,7 +55,17 @@ training:
   optim: adamw_torch              # plain torch AdamW — no bitsandbytes on native Windows
   weight_decay: 0.0
   max_grad_norm: 1.0
-  seed: 42
+  # NO seed field here, deliberately -- fixed 2026-08-01 for consistency with the same
+  # defect found (and fixed) in configs/dpo_*.yaml by the eval-harness track: this field
+  # was dead code, never read by scripts/train_sft.py (which always builds
+  # SFTConfig(seed=<CLI --seed>, ...), never t_cfg["seed"]), and a silent-reproducibility
+  # trap for anyone reproducing from this file alone. B1 has so far only ever been run
+  # with --seed 42 (coincidentally matching the old dead value), so this specific defect
+  # never actually triggered here, but the same class of bug did trigger for B2 (seed 1
+  # launched against a config that said 42) -- fixed here before it can. --seed on the
+  # command line is the sole source of truth; scripts/train_sft.py asserts at startup
+  # that this config does NOT declare a "seed" key, and writes the resolved seed into
+  # results/B1_sft_seed<seed>[_vN]/sft_run_manifest.json.
   bf16: true
   gradient_checkpointing: true    # enabled post-OOM; composes with PEFT/LoRA via TRL's
                                    # automatic enable_input_require_grads() (verified in

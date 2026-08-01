@@ -16,6 +16,7 @@ Usage:
 """
 
 import argparse
+import json
 import os
 import random
 import sys
@@ -55,6 +56,30 @@ def assert_never_redteam(train_file: str) -> None:
         raise RuntimeError(
             f"REFUSING TO TRAIN: '{train_file}' looks like it is under data/redteam/, "
             "which is the frozen held-out evaluation suite and must never be trained on."
+        )
+
+
+def assert_no_config_seed(t_cfg: dict, config_path: str) -> None:
+    """Reproducibility defect fix (found by the eval-harness track, 2026-08-01): shared
+    configs (used across multiple seeds, or where the seed's actual source is the CLI) can
+    carry a `training.seed` value that is never actually read by the training script (it
+    always builds the trainer config with seed=<CLI --seed>), which is a silent-
+    reproducibility trap for anyone reproducing a run from the config file alone -- they
+    would get a different seed than the one actually used, and hence different sampled
+    data / initialisation, with no error. Rather than letting the CLI silently win, this is
+    a hard startup gate: the config must NOT declare a seed at all. --seed on the command
+    line is the sole source of truth; the resolved seed is instead written into the run's
+    own output-directory manifest. Shared by scripts/train_sft.py and scripts/train_dpo.py
+    (imported, not duplicated)."""
+    if "seed" in (t_cfg or {}):
+        raise RuntimeError(
+            f"REPRODUCIBILITY DEFECT: {config_path}'s training: block declares a 'seed' "
+            f"field ({t_cfg['seed']!r}), but this field is never read -- the training "
+            "script always uses the CLI --seed. A config-declared seed that silently "
+            "disagrees with the CLI seed used to launch a run is exactly the defect found "
+            "2026-08-01 (B2 seed 1 launched against a config that still said 42). Remove "
+            "the 'seed' key from this config's training: block -- do not let this run "
+            "proceed with it present."
         )
 
 
@@ -176,6 +201,7 @@ def main():
     d_cfg = cfg["data"]
     l_cfg = cfg["lora"]
     t_cfg = cfg["training"]
+    assert_no_config_seed(t_cfg, args.config)
 
     train_file = d_cfg["train_file"]
     assert_never_redteam(train_file)
@@ -200,6 +226,21 @@ def main():
     print(f"[seed] {seed}")
     print(f"[output_dir] {output_dir}")
     print(f"[train_file] {train_file}")
+
+    # ---- Run manifest: the resolved seed's unambiguous, human-readable record (fixes the
+    #      reproducibility defect found 2026-08-01 -- see assert_no_config_seed / the
+    #      "NO seed field" comment in configs/sft_lora.yaml). Written early (before any
+    #      GPU work) so it exists even if the run later fails. -------------------------------
+    run_manifest = {
+        "config": args.config,
+        "seed": seed,
+        "output_dir": output_dir,
+        "train_file": train_file,
+        "max_steps_override": args.max_steps,
+        "worst_case_smoke": args.worst_case_smoke,
+    }
+    with open(os.path.join(output_dir, "sft_run_manifest.json"), "w", encoding="utf-8") as f:
+        json.dump(run_manifest, f, indent=2)
 
     # ---- Tokenizer + verified chat template -------------------------------------------------
     dtype = getattr(torch, m_cfg["dtype"])

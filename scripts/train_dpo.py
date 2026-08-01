@@ -64,7 +64,7 @@ from trl import DPOConfig, DPOTrainer
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from prepare_pref import build_helpful_pairs, build_safety_pairs
 from prepare_sft import read_system_prompt
-from train_sft import assert_never_redteam  # reused, not duplicated (per Task 2 instruction)
+from train_sft import assert_never_redteam, assert_no_config_seed  # reused, not duplicated
 
 
 def set_seed_everywhere(seed: int) -> None:
@@ -518,6 +518,7 @@ def main():
     d_cfg = cfg["data"]
     l_cfg = cfg["lora"]
     t_cfg = cfg["training"]
+    assert_no_config_seed(t_cfg, args.config)
 
     arm_name = d_cfg.get("arm")
     if arm_name not in ("B2", "T", "T_ctrl"):
