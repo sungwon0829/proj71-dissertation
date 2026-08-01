@@ -83,6 +83,40 @@ def assert_no_config_seed(t_cfg: dict, config_path: str) -> None:
         )
 
 
+# ---------------------------------------------------------------------------------------
+# Training-data hashing (2026-08-01 requirement): prove the seed fully determines the
+# training data. Shared by scripts/train_sft.py and scripts/train_dpo.py (imported, not
+# duplicated) so both use the IDENTICAL serialisation -- a hash is only meaningful if its
+# definition is fixed and singular.
+# ---------------------------------------------------------------------------------------
+
+HASH_DEFINITION = (
+    "SHA-256 of the ordered sequence of records (order matters -- this hashes a sequence, "
+    "not a set). Each record is serialised as canonical JSON: json.dumps(record, "
+    "sort_keys=True, ensure_ascii=False, separators=(',', ':')) -- i.e. keys sorted "
+    "recursively, no extra whitespace, non-ASCII characters kept literal (not \\uXXXX-"
+    "escaped). Records are newline-joined ('\\n'.join(...)) in dataset order, encoded as "
+    "UTF-8, with NO trailing newline after the last record. hashlib.sha256(...).hexdigest() "
+    "of that byte string is the reported hash. Recompute with "
+    "scripts/train_sft.py::hash_ordered_records() or scripts/train_dpo.py's import of it."
+)
+
+
+def canonical_record_repr(record: dict) -> str:
+    return json.dumps(record, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+
+
+def hash_ordered_records(records: list) -> str:
+    """SHA-256 of the ordered sequence of records -- see HASH_DEFINITION. `records` is a
+    list of JSON-serialisable dicts (e.g. {"messages": [...]} for SFT, or
+    {"prompt": [...], "chosen": [...], "rejected": [...]} for DPO); order is preserved
+    exactly as given, never sorted or deduplicated."""
+    import hashlib as _hashlib
+
+    blob = "\n".join(canonical_record_repr(r) for r in records)
+    return _hashlib.sha256(blob.encode("utf-8")).hexdigest()
+
+
 def assert_zero_truncation(tokenizer, examples: list, max_seq_length: int) -> tuple[int, list]:
     """Tokenize every example with the chat template and fail hard if any would truncate.
 
@@ -227,17 +261,47 @@ def main():
     print(f"[output_dir] {output_dir}")
     print(f"[train_file] {train_file}")
 
+    cli_invocation = {
+        "argv": sys.argv,
+        "resolved_seed": seed,
+        "python_executable": sys.executable,
+    }
+
     # ---- Run manifest: the resolved seed's unambiguous, human-readable record (fixes the
     #      reproducibility defect found 2026-08-01 -- see assert_no_config_seed / the
     #      "NO seed field" comment in configs/sft_lora.yaml). Written early (before any
-    #      GPU work) so it exists even if the run later fails. -------------------------------
+    #      GPU work) so it exists even if the run later fails; updated again (stage 2) once
+    #      the trainer's post-preprocessing dataset is available, below. -------------------
     run_manifest = {
         "config": args.config,
         "seed": seed,
+        "cli_invocation": cli_invocation,
         "output_dir": output_dir,
         "train_file": train_file,
         "max_steps_override": args.max_steps,
         "worst_case_smoke": args.worst_case_smoke,
+        "hash_definition": HASH_DEFINITION,
+        "sampled_data_sha256": None,   # filled in below, once `examples` is loaded/ordered
+        "consumed_data_sha256": None,  # filled in after the trainer is constructed
+        "consumed_data_note": "not yet computed",
+        "n_dropped_by_trl": None,
+        "sft_example_order_note": (
+            "sampled_data_sha256/consumed_data_sha256 below hash the dataset's OWN row order "
+            "(the order in train_file, i.e. data/processed/sft_train.jsonl, which was itself "
+            "deterministically shuffled once at data-prep time by prepare_sft.py -- see "
+            "notebook/lab_notebook.md). That is NOT the order the trainer actually iterates "
+            "examples in during training: TRL's SFTConfig defaults to "
+            "train_sampling_strategy='random' (a seeded RandomSampler), which draws a FRESH "
+            "random permutation of the dataset at the start of EACH of the 3 epochs, generated "
+            "lazily by the DataLoader from args.seed/data_seed -- it is not materialised as a "
+            "static list anywhere in the run. This IS deterministic (same seed -> same 3 "
+            "per-epoch permutations, reproducible via torch's Generator), but it is NOT the "
+            "same thing as 'the file order' or as a single fixed sequence this manifest can "
+            "hash without extra work. Not reconstructed here (out of scope for this fix; the "
+            "sampled/consumed hashes below already answer the requested question -- does the "
+            "seed determine WHICH examples are trained on -- honestly stated as a distinct, "
+            "unanswered question from WHAT ORDER they are visited in per epoch)."
+        ),
     }
     with open(os.path.join(output_dir, "sft_run_manifest.json"), "w", encoding="utf-8") as f:
         json.dump(run_manifest, f, indent=2)
@@ -282,6 +346,22 @@ def main():
             f"first batch will contain the {t_cfg['per_device_train_batch_size']} longest "
             f"examples (top length = {lengths[order[0]]} tok)."
         )
+
+    # ---- Sampled-data hash (2026-08-01 requirement): the ordered sequence of examples as
+    #      loaded from train_file (post any --worst_case_smoke reorder, which never happens
+    #      on a real launch -- see the assert above). This is "the data our pipeline
+    #      produced" -- for SFT there is no sampling step (the whole file is used), so this
+    #      is the whole file's content, in its own row order. ------------------------------
+    sampled_data_sha256 = hash_ordered_records([{"messages": ex["messages"]} for ex in examples])
+    print(f"[sampled_data_sha256] {sampled_data_sha256}")
+    manifest_path = os.path.join(output_dir, "sft_run_manifest.json")
+    with open(manifest_path, "r", encoding="utf-8") as f:
+        run_manifest = json.load(f)
+    run_manifest["sampled_data_sha256"] = sampled_data_sha256
+    run_manifest["n_examples_loaded"] = len(examples)
+    with open(manifest_path, "w", encoding="utf-8") as f:
+        json.dump(run_manifest, f, indent=2)
+    print(f"[written, stage 1.5] {manifest_path}")
 
     # ---- Model --------------------------------------------------------------------------------
     print(f"[model] loading {m_cfg['name_or_path']} from {m_cfg['cache_dir']} (dtype={m_cfg['dtype']}, "
@@ -340,6 +420,52 @@ def main():
         processing_class=tokenizer,
         peft_config=lora_config,
     )
+
+    # ---- Consumed-data hash (2026-08-01 requirement): SFTTrainer.__init__ -> _prepare_dataset
+    #      tokenizes, builds labels, truncates to max_length, then drops any row left FULLY
+    #      MASKED by truncation ("Dropping fully masked examples from train dataset" in every
+    #      run's log -- verified by reading the installed trl 1.9.0 source,
+    #      SFTTrainer._prepare_dataset). Our own zero-truncation assert above already
+    #      guarantees no example exceeds max_seq_length, so this filter is expected to drop
+    #      nothing here -- but that is an argument, not a measurement, so it is measured
+    #      directly. "messages" survives this entire pipeline for our data: verified by
+    #      reading the source -- the only remove_columns=["messages"] call in
+    #      _prepare_dataset is inside the non-conversational (`not is_conversational`) EOS
+    #      branch, which our conversational dataset never enters; the tokenize/build-labels/
+    #      truncate/filter steps only touch input_ids/labels/mask columns. -------------------
+    consumed_rows = trainer.train_dataset
+    n_consumed = len(consumed_rows)
+    n_dropped_by_trl = len(examples) - n_consumed
+    if "messages" in consumed_rows.column_names:
+        consumed_records = [{"messages": consumed_rows[i]["messages"]} for i in range(n_consumed)]
+        consumed_data_sha256 = hash_ordered_records(consumed_records)
+        consumed_data_note = (
+            f"Computed directly from trainer.train_dataset after SFTTrainer.__init__ "
+            f"({n_consumed} of {len(examples)} loaded rows survived TRL's own "
+            f"'Dropping fully masked examples' filter; {n_dropped_by_trl} dropped)."
+        )
+    else:
+        consumed_data_sha256 = None
+        consumed_data_note = (
+            f"COULD NOT hash: trainer.train_dataset.column_names={consumed_rows.column_names} did not "
+            "contain 'messages' (TRL internals may have changed). Row count is still known: "
+            f"{n_consumed} of {len(examples)} survived ({n_dropped_by_trl} dropped by TRL), but content "
+            "could not be hashed."
+        )
+    print(f"[consumed_data_sha256] {consumed_data_sha256}")
+    print(f"[n_dropped_by_trl] {n_dropped_by_trl} (of {len(examples)} loaded)")
+    if n_dropped_by_trl != 0:
+        print(f"*** WARNING: TRL dropped {n_dropped_by_trl} example(s) we did not exclude ourselves. ***")
+
+    with open(manifest_path, "r", encoding="utf-8") as f:
+        run_manifest = json.load(f)
+    run_manifest["consumed_data_sha256"] = consumed_data_sha256
+    run_manifest["consumed_data_note"] = consumed_data_note
+    run_manifest["n_dropped_by_trl"] = n_dropped_by_trl
+    run_manifest["n_consumed"] = n_consumed
+    with open(manifest_path, "w", encoding="utf-8") as f:
+        json.dump(run_manifest, f, indent=2)
+    print(f"[written, stage 2] {manifest_path}")
 
     # ---- B. Empirical masking verification (critical gate) ------------------------------------
     dataloader = trainer.get_train_dataloader()

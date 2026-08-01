@@ -64,7 +64,12 @@ from trl import DPOConfig, DPOTrainer
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from prepare_pref import build_helpful_pairs, build_safety_pairs
 from prepare_sft import read_system_prompt
-from train_sft import assert_never_redteam, assert_no_config_seed  # reused, not duplicated
+from train_sft import (  # reused, not duplicated
+    assert_never_redteam,
+    assert_no_config_seed,
+    HASH_DEFINITION,
+    hash_ordered_records,
+)
 
 
 def set_seed_everywhere(seed: int) -> None:
@@ -657,12 +662,33 @@ def main():
         )
         print(f"[weak-control note] {weak_control_note}")
 
+    # ---- Training-data hash (2026-08-01 requirement): the ordered sequence of pairs our
+    #      sampling step produced -- this is the one the seed should fully determine. -------
+    train_pairs = sampled_helpful + sampled_safety
+    sampled_data_sha256 = hash_ordered_records(train_pairs)
+    print(f"[sampled_data_sha256] {sampled_data_sha256}")
+
+    cli_invocation = {
+        "argv": sys.argv,
+        "resolved_seed": seed,
+        "python_executable": sys.executable,
+    }
+
     # ---- Manifest: log both counts + sampled pair ids, so a seed is reproducible from its
-    #      config alone (Task 2 requirement) -----------------------------------------------
+    #      config alone (Task 2 requirement). Written in TWO stages: this first write
+    #      happens before any model/GPU work, so the sampling record survives even if model
+    #      loading or training later fails; consumed_data_sha256 (only obtainable from the
+    #      constructed trainer) is added in a second write further down. -------------------
     manifest = {
         "arm": arm_name,
         "config": args.config,
         "seed": seed,
+        "cli_invocation": cli_invocation,
+        "hash_definition": HASH_DEFINITION,
+        "sampled_data_sha256": sampled_data_sha256,
+        "consumed_data_sha256": None,  # filled in after the trainer is constructed, below
+        "consumed_data_note": "not yet computed -- trainer not constructed at this point in the run",
+        "n_dropped_by_trl": None,
         "n_helpful_sampled": len(sampled_helpful),
         "n_safety_sampled": len(sampled_safety),
         "total_pairs": total_pairs,
@@ -679,9 +705,8 @@ def main():
     manifest_path = os.path.join(output_dir, "dpo_data_manifest.json")
     with open(manifest_path, "w", encoding="utf-8") as f:
         json.dump(manifest, f, indent=2)
-    print(f"[written] {manifest_path}")
+    print(f"[written, stage 1 of 2] {manifest_path}")
 
-    train_pairs = sampled_helpful + sampled_safety
     assert_zero_truncation_dpo(train_pairs, tokenizer, d_cfg["max_length"])
     train_dataset = Dataset.from_list(train_pairs)
 
@@ -755,6 +780,68 @@ def main():
         train_dataset=train_dataset,
         processing_class=tokenizer,
     )
+
+    # ---- Consumed-data hash (2026-08-01 requirement): DPOTrainer.__init__ -> _prepare_dataset
+    #      tokenizes prompt/prompt+chosen/prompt+rejected separately (not via one combined
+    #      apply_chat_template call, unlike our own filter_by_max_length/
+    #      assert_zero_truncation_dpo above) and then drops any row whose PROMPT ALONE
+    #      already reaches max_length under truncation_mode="keep_start" (verified by reading
+    #      the installed trl 1.9.0 source, DPOTrainer._prepare_dataset -- the "Dropping fully
+    #      truncated examples from train dataset" progress bar seen in every run's log is this
+    #      step; that bar always iterates every input row to CHECK it, so its 100% completion
+    #      does not by itself mean anything was dropped). Because our own pre-filter already
+    #      enforces prompt+chosen and prompt+rejected <= max_length, and completions are
+    #      non-empty, prompt-alone-only length should never independently exceed max_length --
+    #      but that is an argument, not a measurement, and tokenizing prompt-alone vs.
+    #      prompt+completion-then-split (TRL's method) versus tokenizing prompt+completion as
+    #      one combined string (our method) are NOT guaranteed byte-identical due to BPE merge
+    #      behaviour at the boundary. So this is measured directly from the trainer's own
+    #      post-filter dataset, not assumed from the argument above.
+    #      trainer.train_dataset after __init__ retains the original "prompt"/"chosen"/
+    #      "rejected" columns (verified empirically: TRL's .map() calls here never pass
+    #      remove_columns) alongside new tokenized *_ids columns, in the surviving rows'
+    #      original relative order (.map()/.filter() never reorder) -- so this can be hashed
+    #      with the exact same hash_ordered_records() function/definition as the sampled data,
+    #      making the two hashes directly, meaningfully comparable.
+    consumed_rows = trainer.train_dataset
+    n_consumed = len(consumed_rows)
+    n_dropped_by_trl = len(train_pairs) - n_consumed
+    if "prompt" in consumed_rows.column_names and "chosen" in consumed_rows.column_names and "rejected" in consumed_rows.column_names:
+        consumed_records = [
+            {"prompt": consumed_rows[i]["prompt"], "chosen": consumed_rows[i]["chosen"], "rejected": consumed_rows[i]["rejected"]}
+            for i in range(n_consumed)
+        ]
+        consumed_data_sha256 = hash_ordered_records(consumed_records)
+        consumed_data_note = (
+            f"Computed directly from trainer.train_dataset after DPOTrainer.__init__ "
+            f"({n_consumed} of {len(train_pairs)} sampled rows survived TRL's own "
+            f"'Dropping fully truncated examples' filter; {n_dropped_by_trl} dropped)."
+        )
+    else:
+        consumed_data_sha256 = None
+        consumed_data_note = (
+            f"COULD NOT hash: trainer.train_dataset.column_names={consumed_rows.column_names} did not "
+            "contain the expected 'prompt'/'chosen'/'rejected' columns (TRL internals may have changed). "
+            f"Row count is still known: {n_consumed} of {len(train_pairs)} survived "
+            f"({n_dropped_by_trl} dropped by TRL), but content could not be hashed."
+        )
+    print(f"[consumed_data_sha256] {consumed_data_sha256}")
+    print(f"[n_dropped_by_trl] {n_dropped_by_trl} (of {len(train_pairs)} sampled)")
+    if n_dropped_by_trl != 0:
+        print(f"*** WARNING: TRL dropped {n_dropped_by_trl} example(s) we did not exclude ourselves -- "
+              "this changes the effective matched-volume count. If this is nonzero for one arm and not "
+              "the other, matched volume is no longer matched. ***")
+
+    # Stage 2 of 2: re-read and update the manifest with the consumed-data fields.
+    with open(manifest_path, "r", encoding="utf-8") as f:
+        manifest = json.load(f)
+    manifest["consumed_data_sha256"] = consumed_data_sha256
+    manifest["consumed_data_note"] = consumed_data_note
+    manifest["n_dropped_by_trl"] = n_dropped_by_trl
+    manifest["n_consumed"] = n_consumed
+    with open(manifest_path, "w", encoding="utf-8") as f:
+        json.dump(manifest, f, indent=2)
+    print(f"[written, stage 2 of 2] {manifest_path}")
 
     print(f"[max_length_policy] {d_cfg['max_length_policy']} (exclude, not truncate -- see config comments)")
 

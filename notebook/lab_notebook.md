@@ -1540,3 +1540,58 @@ funnel statistics rather than hardcoded, so it cannot drift from the data:
 "T_ctrl differs from T on 776 of 4,924 safety pairs (15.8%), so it bounds the safety-direction
 effect rather than isolating it; it still detects the case where T's advantage comes entirely
 from adding out-of-domain preference data."
+
+## 2026-08-01 — Training-data hashes added to run manifests; seed determinism VERIFIED
+
+Owner requirement: every run manifest records a SHA-256 of the exact training data consumed
+(sampled pairs, in order) plus the full CLI invocation, so a reader can prove the seed
+determines the data rather than taking it on trust.
+
+**Two hashes, because sampled ≠ consumed.** TRL prints "Dropping fully truncated examples"
+during setup, so the dataset the trainer consumes need not equal the one we sampled. Both are
+recorded and both definitions are written into every manifest:
+- `sampled_data_sha256` — our sampling step's output, in order (what the seed should determine).
+- `consumed_data_sha256` — extracted from `trainer.train_dataset` after `__init__`, i.e. what
+  TRL actually trains on. Verified empirically that this preserves the original
+  prompt/chosen/rejected/messages columns rather than assuming it.
+Serialisation is fixed and stated: newline-joined canonical JSON per record
+(`sort_keys=True, separators=(',',':')`), in order, UTF-8, no trailing newline.
+`cli_invocation` records the verbatim command line, resolved seed and interpreter path.
+
+**TRL's drop behaviour, read from source rather than inferred:** DPO drops rows whose *prompt
+alone* hits `max_length` under `keep_start`; SFT drops rows left fully masked after truncation.
+The progress bar reaching 100% counts rows *checked*, not rows *removed* — an easy misreading.
+**Measured drop counts are zero everywhere** (B1 v2: 0/2305; B2 all versions: 0/19,924), so our
+own pre-filters were already sufficient and `sampled == consumed`. T and T_ctrl record this
+live; their drop counts must match or "matched volume" is not matched.
+
+**VERIFICATION: PASS, and stronger than the check requested.** Re-running the sampling step
+alone in a fresh process (no training, no GPU) for B2 seed 1 reproduces the manifest hash. Going
+further: B2's live-recorded `sampled_helpful_pair_ids` are **byte-identical across all three
+real completed runs — v1 (void), v2 (superseded) and v3 (current)** — despite those runs
+spanning both the B1 scrub and the beta change, and the fresh re-sample matches all three
+exactly. **The seed fully determines the sampled training data.**
+
+**Backfill, with provenance flags — a reconstructed hash is not a recorded one.**
+
+| Run | `sampled_data_sha256` | reconstructed |
+|---|---|---|
+| B1 v1 (VOID) | **UNRECOVERABLE** — pre-scrub `sft_train.jsonl` was overwritten, no backup, not git-tracked | n/a |
+| B1 v2 | `e30238…098a5` | **true** (source file hash-verified unchanged) |
+| B2 v1 / v2 / v3 | `4ddb48…bf705` — identical across all three | **true**, corroborated by three independent live-recorded pair-ID lists |
+
+B1 v1's gap is stated rather than papered over: the only fallback (`52A7074D…20DA3DE3` in this
+notebook) is an abbreviated hash under a *different* definition and does not substitute. That
+run is void, so the cost is one line in the reproducibility appendix.
+
+**B2 v3 (beta 0.3) finished.** train_loss 0.06. Reward margins rose to ~13.0 versus ~8.3 at
+beta 0.1 — but that is **not** worse over-optimisation, it is the `reward = beta × log-ratio`
+scaling: the underlying log-ratio *shrank*, ≈43 versus ≈83. Reading the raw margin as a
+severity measure across different betas is a unit error and is recorded here because a reviewer
+would otherwise flag it. The generation-quality verdict is pending and is being measured
+quantitatively this time — strict and loose detectors over the full 300-item suite, plus a
+separate count of the fabricated-`User:`-turn pathology — because "0 of 8 clean" would be
+consistent with a true degeneracy rate up to ~30% and is too thin a basis to *accept* a config.
+**Decision rule fixed in advance:** accept beta 0.3 if the loose rate is at or near B1 v2's ~6%
+with no fabricated-turn instances; otherwise stop, since any further beta change applies to all
+three arms and costs B2 a fourth run.
