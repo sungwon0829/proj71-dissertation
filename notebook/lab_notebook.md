@@ -1274,3 +1274,66 @@ floor finding **survives regardless**, because it is a property of B3's structur
 depend on T's advantage at all. The paper therefore has a result that does not rest on the
 experiment succeeding. That should shape the Intro's framing: lead with the controlled
 comparison, but do not stake the paper's contribution solely on T beating B3.
+
+---
+
+## 2026-08-01 — Methods drafted; internal contradictions found by the paper-writer
+
+`paper\` created: `main.tex` (TMLR skeleton, anonymous, defines `\scopefence` once so the
+Intro and Conclusion copies cannot drift), `methods.tex` (**drafted in full**, 14
+subsections), `appendix.tex`, `references.bib` (18 verified entries + 5 explicitly-marked
+placeholders), and stubs for the remaining sections each carrying a `\TODO` brief.
+`tmlr.sty` is **not** present and was deliberately not fabricated — `main.tex` carries a
+build note saying it must come from the official TMLR author kit and that the document will
+not compile until it does. All seven pre-registration revisions plus the label-provenance
+correction are reflected in Methods §3.9–3.12.
+
+**Contradictions in our own record, found while drafting. These matter because both numbers
+were already in the notebook and a reader would have hit them.**
+
+1. **Over-refusal bootstrap half-width disagrees with itself.** `preregistration.md`
+   Revisions 6/7 say **4.6–6.6 points** at a true difference of zero; `power_analysis.md` §4
+   says **5.3 / 7.1 / 8.5** at baselines of 10/20/35%. The 4.6–6.6 figure is the one printed
+   into the pre-registration, which makes it the worse one to have wrong. Dispatched for
+   reconciliation, with the rule that an amendment to the pre-registration must be visible
+   and dated, never a silent overwrite. The conclusion (over-refusal is descriptive, not a
+   test) does not change either way; the quoted number must.
+2. **The −15.4 / +7.1 / net +8.3 convention decomposition is un-sourced as to arm.** It
+   almost certainly came from the B0-response smoke arm, since no real B3 existed when it was
+   computed. **Correctly omitted from Methods** and moved to Results, to be recomputed on the
+   real arms and labelled with the arm it came from.
+3. **427 vs 429 distinct therapists — resolved in the main thread.** Neither was wrong; they
+   count different things. CounselChat has **437** distinct `therapistInfo` values overall,
+   **429** after the empty-answer drop. The acceptance-test grep derived **427** usable
+   *names* from those 429 records (two yield no usable name under the derivation heuristic).
+   Both figures stand; Methods must say which is which rather than harmonising them.
+4. **B1 brevity statistics were measured on the VOID v1 checkpoint** (median 97 chars
+   overall, 73 on `crisis_adjacent`, vs base 1118). They appear in "Observed B1 behaviours"
+   and `preregistration.md` §8 and are Discussion-facing. Quoting v1 statistics beside v2
+   results is the same stale-artefact error the harness hard-fails on for adapters.
+   Dispatched for re-measurement on B1 v2 from the existing full-suite generations (no GPU
+   cost), reported side by side with v1 so we can see whether the scrub changed the arm's
+   character.
+5. **Seed values for B2/T/T_ctrl seeds 2–3 were never fixed.** "Three seeds" appears
+   throughout but the values are unstated and only seed 1 has run. Being fixed and recorded
+   before those runs start.
+6. **The suite-originality claim is self-reported.** `SUITE_MANIFEST.md` §4.3 asserts "the
+   technique families come from the literature; the text does not", but the leakage audit only
+   ever compared against *our own* training corpora — never against published jailbreak
+   collections. If our items are near-duplicates of AdvBench/HarmBench/JailbreakBench/DAN
+   prompts, the base model may have seen them and the evaluation is contaminated. An
+   independent check against public corpora is running (read-only; the suite is frozen, so any
+   finding is reported as a limitation, never fixed).
+7. **The privacy verification is corpus-internal.** "0 residual self-identity leaks" proves no
+   CounselChat contributor's identity survives *in their own answer*. It does not prove the
+   model cannot emit some other memorised identity, and the acceptance test covered 16
+   generations plus one item — thin evidence for a privacy claim. Written up as measured
+   rather than as a guarantee.
+
+**CRITICAL PATH HAS MOVED.** `is_paper_number` currently **cannot be true for any arm**:
+Revision 4 forces it false without the human over-refusal labels, and Revision 6 refuses the
+attenuation correction without human-derived per-arm recall. Both depend on the owner's two
+hand-labelling tasks (60-item ASR worksheet; 120-item over-refusal worksheet + 20-item
+spot-check). **The owner's labelling now gates every paper number, ahead of the remaining
+training runs.** This is correct behaviour and is not being loosened; the harness will print
+exactly which human input is missing, by filename.

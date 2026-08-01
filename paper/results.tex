@@ -1,0 +1,31 @@
+\section{Results}
+\label{sec:results}
+
+\TODO{Results. Objective data only, zero interpretation. Written immediately after
+Methods, once the arms have trained and \texttt{scripts/stats.py} has emitted the headline
+sentence. Required content:
+
+(1) Table~1 --- rows B0/B1/B2/B3/T/T\_ctrl by columns attack-success rate (primary,
+180 non-crisis items), crisis co-primary, over-refusal, helpfulness. Mean with 95\%
+bootstrap CI over prompts for the multi-seed arms; single-run figures italicised for B0,
+B1 and T\_ctrl. Over-refusal for B3 and T from human labels; for B0/B1/B2 from the
+automated judge and marked as such.
+
+(2) Table~2 --- attack-success rate per category, B3 versus T, including the categories
+where T does not win.
+
+(3) The filter-attributable versus model-generated decomposition of B3's failures,
+reported as a primary quantity.
+
+(4) The B3 threshold frontier on the real arms, produced by
+\texttt{scripts/b3\_threshold\_frontier.py} against B2's scored file.
+
+(5) Both attack-success effects, raw observed and attenuation-corrected, side by side,
+with the recall-sensitivity sweep.
+
+(6) Judge agreement: the human 60-item figure and the inter-model figures, clearly
+distinguished.
+
+(7) The negative and mixed results with the same prominence as the positive ones,
+including the T\_ctrl comparison, which can attribute the headline to out-of-domain data
+rather than to safety content.}

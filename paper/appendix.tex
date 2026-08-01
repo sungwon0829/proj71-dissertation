@@ -1,0 +1,135 @@
+% =====================================================================================
+% APPENDIX — reproducibility detail pushed out of Methods.
+% Every value here comes from configs/*.yaml or notebook/lab_notebook.md.
+% =====================================================================================
+
+\section{Training and evaluation hyperparameters}
+\label{app:hparams}
+
+Table~\ref{tab:hparams} lists every hyperparameter needed to reproduce a run. A run is
+reproducible from its configuration file plus \texttt{--seed}; no hyperparameter is
+hard-coded in a script.
+
+\begin{table}[h]
+\centering
+\caption{Hyperparameters. The LoRA block is byte-identical across B1, B2, T and
+T\_ctrl and is asserted equal at start-up. The three DPO configurations are asserted
+byte-identical on every field except arm label, data composition and preference
+direction.}
+\label{tab:hparams}
+\small
+\begin{tabular}{lll}
+\toprule
+& SFT (B1) & DPO (B2 / T / T\_ctrl) \\
+\midrule
+Base model            & \multicolumn{2}{l}{Qwen2.5-7B-Instruct, revision \texttt{a09a35458c702b33eeacc393d103063234e8bc28}} \\
+Precision             & \multicolumn{2}{l}{bfloat16} \\
+Attention             & \multicolumn{2}{l}{SDPA} \\
+LoRA rank $r$         & \multicolumn{2}{l}{32} \\
+LoRA $\alpha$         & \multicolumn{2}{l}{64} \\
+LoRA dropout          & \multicolumn{2}{l}{0.05} \\
+LoRA target modules   & \multicolumn{2}{l}{\texttt{q,k,v,o,gate,up,down\_proj}} \\
+LoRA bias             & \multicolumn{2}{l}{none} \\
+Trainable parameters  & \multicolumn{2}{l}{80{,}740{,}352 of 7{,}696{,}356{,}864 (1.049\%)} \\
+\midrule
+Epochs                & 3                       & 1 \\
+Learning rate         & $1\times10^{-4}$        & $5\times10^{-6}$ \\
+LR schedule           & cosine, warm-up 0.03    & cosine, warm-up 0.03 \\
+Optimiser             & AdamW (torch)           & AdamW (torch) \\
+Weight decay          & 0.0                     & 0.0 \\
+Max grad norm         & 1.0                     & 1.0 \\
+Per-device batch      & 2                       & 2 \\
+Gradient accumulation & 8                       & 8 \\
+Effective batch       & 16                      & 16 \\
+Gradient checkpointing& true (non-reentrant)    & true (non-reentrant) \\
+Max sequence length   & 4096 (zero truncation)  & 2048 (over-length pairs excluded) \\
+Packing               & false                   & --- \\
+Assistant-only loss   & true (verified)         & --- \\
+DPO $\beta$           & ---                     & 0.3 \\
+DPO loss              & ---                     & sigmoid, label smoothing 0.0 \\
+Reference log-probs   & ---                     & precomputed, batch 8 \\
+Optimiser steps       & 435                     & 1{,}246 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Environment.} One RTX PRO 6000 Blackwell (96\,GB), Windows Server 2025,
+Python virtual environment with PyTorch 2.11.0+cu128, transformers 5.14.1, TRL 1.9.0,
+PEFT 0.19.1, accelerate 1.14.0, datasets 5.0.0, tokenizers 0.22.2, NumPy 2.4.4,
+SciPy 1.18.0, ftfy 6.3.1. \texttt{PYTORCH\_CUDA\_ALLOC\_CONF=expandable\_segments:True}
+is set at launch but is a no-op on native Windows and is not the reason any memory
+problem was solved; the batch split and gradient checkpointing are.
+
+\paragraph{Observed run costs.} B1: 435 optimiser steps, 3 epochs, final training loss
+2.1278, wall-clock 1{,}691\,s, peak 19.91\,GB. A first B1 attempt at per-device batch 4
+with no gradient checkpointing ran out of memory at step 136 of 435 after allocating
+88\,GB; halving the per-device batch, doubling gradient accumulation to hold the effective
+batch at 16, and enabling gradient checkpointing reduced peak memory to 19.3\,GB even
+under a worst-case length-sorted batch order.
+\TODO{final training loss, wall-clock and peak memory for B2, T and T\_ctrl at
+$\beta=0.3$, all seeds.}
+
+\section{Data pipeline counts}
+\label{app:datacounts}
+
+\paragraph{SFT.} ESConv train split 910 conversations in, 910 out, 0 dropped. CounselChat
+2{,}775 rows in; 26 dropped for empty answer text; 2{,}749 remaining; deduplicated to at
+most two answers per question by upvotes then views, leaving 1{,}395. Merged and shuffled:
+\textbf{2{,}305} conversations. Token statistics with the Qwen2.5 tokenizer, no system
+prompt: ESConv median 647, p95 1098, max 2{,}603; CounselChat (post-deduplication) median
+276, p95 641, max 1{,}207. Assistant-token share: ESConv 264{,}104 (47.4\%), CounselChat
+293{,}097 (52.6\%). By turn instances rather than tokens, ESConv supplies 10{,}191 of
+11{,}586 assistant turns (88\%), which is why per-turn stopping behaviour follows ESConv's
+short-turn pattern.
+
+\paragraph{Helpfulness pairs.} 34{,}329 pairs $\rightarrow$ 33{,}667 after excluding 662
+safety-inverted pairs $\rightarrow$ 33{,}596 after excluding 77 over-length pairs (6
+overlapping). B2 samples 19{,}924; T and T\_ctrl sample the identical 15{,}000 under the
+same seed.
+
+\paragraph{Safety pairs.} 73{,}907 PKU-SafeRLHF training rows $\rightarrow$ 26{,}170 after
+the harm-category-or-keyword relevance filter (23{,}214 by category, 5{,}077 by keyword)
+$\rightarrow$ \textbf{4{,}924} after requiring a within-pair safety contrast (21{,}246
+removed: 1{,}443 both-safe, 19{,}803 both-unsafe). Zero rows exceed the 2{,}048-token
+limit, so the length policy removes none. Mental-health keyword coverage: 11.8\% (582 of
+4{,}924) against the project's own buckets, 4.9\% (240 of 4{,}924) against a broader
+independent list. Rows where the safer and the better response coincide: 4{,}148 of 4{,}924
+(84.24\%), so T\_ctrl differs from T on 776 pairs (15.8\%).
+
+\section{Frozen suite: freeze record and leakage audit}
+\label{app:suite}
+
+\paragraph{Freeze.} \texttt{data/redteam/redteam\_suite.jsonl}, 300 items, SHA-256
+\texttt{e14c3a24184d01cbf31bbcfa42be03104ae07b0bea1132bc5b08a177645b6689}, frozen
+2026-07-31 01:22:46 +09:00. Validator re-run at freeze time and passed. Category counts:
+\texttt{prefilling} 60 (58 single-exchange with a forced assistant prefix, 2 multi-turn),
+\texttt{persona} 60 (single user turn), \texttt{many\_shot} 60 (3--7 fabricated
+demonstration pairs plus a final user turn), \texttt{crisis\_adjacent} 60 (58 single-turn,
+2 multi-turn), \texttt{benign\_sensitive} 60 (single user turn, enforced by the validator).
+Item word count: minimum 8, median 37, maximum 114.
+
+\paragraph{Leakage.} Against 43{,}863 training records: 0 exact normalised matches
+($\geq 8$ words), 0 shared contiguous 12-word spans, maximum word-5-gram Jaccard 0.1034
+(mean 0.0150, items $\geq 0.30$: 0). Internal pairwise maximum 0.1014 (mean 0.0177, pairs
+$\geq 0.40$: 0). Short-utterance collisions below the 8-word threshold: ``yes'' 78,
+``sure'' 2. One item (\texttt{benign\_sensitive\_035}) was rewritten before the freeze
+after a 12-word span match and is recorded in the manifest.
+
+\section{Judge prompts and rubrics}
+\label{app:prompts}
+
+The pinned system prompt is reproduced in Section~\ref{sec:methods:sft}.
+\TODO{reproduce verbatim, as figures: the behavioural attack-success rubric v3
+(\texttt{configs/behavioural\_judge\_prompt.txt}), the crisis clause rubric v3
+(\texttt{configs/crisis\_judge\_prompt.txt}), the over-refusal rubric v3
+(\texttt{configs/refusal\_judge\_prompt.txt}), and the exact B3 replacement string. All
+four are pinned by hash in \texttt{configs/judges\_pinned.lock.json}, lock SHA-256
+\texttt{ed152881bbd86558050e0dd5803f46ce846e0eeff962b06f97f56d489bba551e}.}
+
+\section{Judge validation sets}
+\label{app:validation}
+
+\TODO{table of every validation set: name, $n$, which judge version it measured, whether
+it was independent of that version's tuning, labeller identity and whether the labeller
+was human. The inter-model figures are in Section~\ref{sec:methods:kappa}; the human
+60-item worksheet result is pending.}

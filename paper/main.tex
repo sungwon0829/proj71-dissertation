@@ -1,0 +1,85 @@
+% =====================================================================================
+% Project 71 — Safety-Focused Post-Training of a Therapy-Support LLM
+% TMLR submission, anonymous.
+%
+% *** BUILD NOTE — READ BEFORE COMPILING ***
+% `tmlr.sty` is NOT present in this directory and has NOT been reconstructed or faked.
+% It must be downloaded from the official TMLR author kit (the `tmlr-style-file`
+% repository maintained by the JMLR/TMLR organisation) and placed next to this file,
+% together with `fancyhdr.sty` if the local TeX distribution lacks it.
+% Until then this document will not compile: that is deliberate. Inventing a style file
+% would produce a paper whose layout is not the venue's layout.
+%
+% Anonymous until submission: keep `\usepackage{tmlr}`.
+% Switch to `\usepackage[preprint]{tmlr}` only when deanonymising.
+% Switch to `\usepackage[accepted]{tmlr}` only on acceptance.
+% =====================================================================================
+
+\documentclass{article}
+
+\usepackage{tmlr}
+% \usepackage[preprint]{tmlr}
+% \usepackage[accepted]{tmlr}
+
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{microtype}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{url}
+
+% ---------------------------------------------------------------------------------
+% \TODO{} marks a number or statement that does not yet exist in results/ or notebook/.
+% NEVER replace a \TODO with a plausible-looking guess. Every one of these is listed,
+% with its source, in the draft hand-off note.
+% ---------------------------------------------------------------------------------
+\newcommand{\TODO}[1]{\textcolor{red}{\textbf{[TODO: #1]}}}
+
+% ---------------------------------------------------------------------------------
+% The scope fence. Defined once so that the Introduction and the Conclusion state it
+% VERBATIM and cannot drift apart. Text is copied exactly from the project contract.
+% ---------------------------------------------------------------------------------
+\newcommand{\scopefence}{one model family (Qwen2.5-7B-Instruct), English only, one
+frozen attack taxonomy, LoRA post-training, research prototype, no clinical claims
+anywhere}
+
+\title{Trained-In Safety Versus a Bolted-On Guardrail\\
+in a Therapy-Support Language Model}
+
+% Anonymous submission: tmlr.sty suppresses the author block unless [preprint] or
+% [accepted] is passed. The block below is kept complete so deanonymising is one edit.
+\author{\name Anonymous Author(s) \email anon@example.com \\
+\addr Anonymous Institution}
+
+\def\month{08}
+\def\year{2026}
+\def\openreview{\TODO{OpenReview forum ID}}
+
+\begin{document}
+
+\maketitle
+
+% ---------------------------------------------------------------------------------
+% WRITE ORDER (project contract): Methods -> Results -> Introduction -> Related Work
+% -> Discussion -> Conclusion -> Abstract LAST.
+% Only methods.tex is drafted at this revision. The remaining files are stubs so the
+% document structure is fixed and each section can be filled in place.
+% ---------------------------------------------------------------------------------
+
+\input{abstract}
+\input{intro}
+\input{related_work}
+\input{problem}
+\input{methods}
+\input{results}
+\input{discussion}
+\input{conclusion}
+
+\bibliographystyle{tmlr}
+\bibliography{references}
+
+\appendix
+\input{appendix}
+
+\end{document}
