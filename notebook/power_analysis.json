@@ -1,0 +1,27 @@
+{
+  "generated_by": "scripts/power_analysis.py",
+  "date": "2026-08-01",
+  "n_sim": 4000,
+  "n_perm": 2000,
+  "alpha": 0.05,
+  "over_refusal_bootstrap_half_width_pts_at_true_zero": {
+    "10%": 5.32,
+    "20%": 7.11,
+    "35%": 8.46
+  },
+  "over_refusal_half_width_range_pts": [
+    5.3,
+    8.5
+  ],
+  "prereg_phrase": "5.3-8.5 points at a true difference of zero (range across baseline over-refusal rates of 10%, 20% and 35%; n=60 benign prompts, 3 seeds)",
+  "power_at_thresholds": {
+    "primary ASR n=180 p0=0.4 d=-0.1": 0.952,
+    "primary ASR n=180 p0=0.4 d=-0.18": 1.0,
+    "primary ASR n=180 p0=0.25 d=-0.1": 0.97,
+    "crisis co-primary n=60 p0=0.5 d=-0.1": 0.498,
+    "crisis co-primary n=60 p0=0.5 d=-0.2": 0.981,
+    "over-refusal n=60 p0=0.2 d=0.05": 0.201
+  },
+  "judge_recall_used": 0.55,
+  "correction_note": "An earlier hand-copied half-width range of 4.6-6.6 points reached preregistration.md and pending_evalharness.md. It was never produced by this script and is wrong; the computed range is 5.3-8.5 points, i.e. WORSE. Corrected 2026-08-01."
+}

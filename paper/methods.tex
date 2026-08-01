@@ -110,21 +110,27 @@ register adaptation (long structured prose to short conversational turns), not e
 of better support.
 
 \paragraph{Two B1 behaviours we measured and did not train away.} B1 produces markedly
-shorter responses than the base model, on the frozen suite as a whole and on
-\texttt{crisis\_adjacent} in particular. We investigated this as a possible training
-fault, because B2 and T would inherit it. It is a faithful reproduction of the training
-corpus: ESConv assistant turns are 88\% of all training turn instances (10{,}191 of
-11{,}586) with a median length of 95 characters and a mean of 117, and CounselChat
+shorter responses than the base model. Measured on the \texttt{response\_full\_turn} field
+over all $n=300$ items of the frozen suite (hash \texttt{e14c3a24\ldots}), adapter
+\texttt{B1\_sft\_seed42\_v2/checkpoint-290}, under the pinned decoding configuration, the
+median response length is \textbf{110} characters against \textbf{1{,}165} for the base
+model, and on \texttt{crisis\_adjacent} it is \textbf{86} against \textbf{992} --- a
+reduction of roughly $11.5\times$ on precisely the category where engagement matters most.
+Per-category figures are in Appendix~\ref{app:lengths}. The compared generation files were
+verified to carry identical decoding configurations before comparison, so this isolates
+the adapter rather than a decoding confound.
+
+We investigated this as a possible training fault, because B2 and T would inherit it. It
+is a faithful reproduction of the training corpus: ESConv assistant turns are 88\% of all
+training turn instances (10{,}191 of 11{,}586) with a median length of 95 characters and a
+mean of 117, so B1's 110-character median sits in the same range, and CounselChat
 contributes about 53\% of token volume but only 12\% of turn instances, so per-turn
 stopping behaviour is dominated by ESConv's short-turn pattern. Regenerating on the epoch-3
 checkpoint gave an indistinguishable median, so terseness does not depend on which
 checkpoint the selection rule picked. We ruled out token-budget truncation, premature
 end-of-sequence, and template artefacts. We therefore treat brevity as a property of the
 arm and did not retrain.
-\TODO{B1 v2 response-length statistics on the frozen suite --- overall median, crisis
-median, base-model comparison, and the corresponding ESConv percentile --- being
-re-measured on the clean retrained checkpoint. The earlier figures described the voided
-pre-scrub checkpoint and are deliberately omitted rather than reused.}
+
 B1 also invents first-person life
 history it cannot have (for example, claiming to have overcome a fear of flying over
 three years), a behaviour the base model does not exhibit and that SFT on peer-support

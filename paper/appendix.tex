@@ -132,6 +132,77 @@ no item above 0.20. The suite SHA-256 was verified before and after the audit an
 unchanged. Corpora not obtained, and about which no claim is made: CRADLE Bench, Shen et
 al.'s \texttt{forbidden\_question} set, and any gated or unreleased set.
 
+\section{Response lengths on the frozen suite}
+\label{app:lengths}
+
+Table~\ref{tab:lengths} gives response lengths in characters for the untrained base model
+and for B1. Field: \texttt{response\_full\_turn}. $n = 300$ (60 per category). Suite hash
+\texttt{e14c3a24184d01cbf31bbcfa42be03104ae07b0bea1132bc5b08a177645b6689}. Adapter
+\texttt{B1\_sft\_seed42\_v2/checkpoint-290}. Decoding: \texttt{do\_sample=false},
+\texttt{repetition\_penalty=1.05}, \texttt{max\_new\_tokens=512}. All compared generation
+files were checked to carry identical decoding configurations before comparison.
+
+The field matters and must always be named: for \texttt{prefilling} items the attacker
+supplies the opening of the assistant turn, so \texttt{response\_continuation} yields
+different numbers from \texttt{response\_full\_turn} for that category.
+
+\begin{table}[h]
+\centering
+\caption{Response length in characters, base model versus B1.}
+\label{tab:lengths}
+\small
+\begin{tabular}{lrr}
+\toprule
+& B0 (base) & B1 \\
+\midrule
+Overall median            & 1{,}165 & 110 \\
+Overall mean              & 1{,}224.8 & 298.0 \\
+\midrule
+\texttt{prefilling} median       & 742 & 144 \\
+\texttt{persona} median          & 1{,}489 & 89 \\
+\texttt{many\_shot} median       & 402 & 28 \\
+\texttt{crisis\_adjacent} median & 992 & 86 \\
+\texttt{benign\_sensitive} median& 2{,}118 & 460 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Number provenance: a stated practice, and two failures that produced it}
+\label{app:provenance}
+
+\paragraph{The rule.} Every quantitative figure in this paper names the field it was
+measured on, the $n$, the frozen-suite hash where applicable, and the adapter or model
+revision that produced the generations. A figure that cannot state all four is not
+reported. This is a practice, not a one-off correction, and it is enforced by the scoring
+harness, which writes the suite hash, the adapter hash, the judge identities and the
+prompt hashes into every output file, and which marks a run as a paper number only when
+that provenance chain is complete.
+
+\paragraph{Why the rule exists.} We adopted it after two provenance failures of the same
+class, in which a number entered the project record, was repeated in reports, and turned
+out on inspection to have no traceable origin.
+
+The first concerned label provenance. Every judge agreement figure we measured up to
+2026-08-01 was computed against reference labels produced by a language-model agent and
+stored in a field named \texttt{human\_label}; internal documents described them as
+hand-labelled. The description was wrong, the figures are inter-model agreement, and the
+consequences are set out in Section~\ref{sec:methods:kappa}. The field was renamed, an
+explicit boolean for labeller humanity was added, and scoring now raises rather than
+defaulting when that boolean is absent.
+
+The second concerned response-length statistics. A set of length figures for the SFT arm
+circulated in the project record and in draft text. They were derived from the voided
+pre-scrub checkpoint, and on re-measurement one of them --- the crisis-category figure ---
+could not be reproduced from any field of any generation file on disk, so its derivation
+could not be established at all. A base-model figure quoted alongside it also disagreed
+with direct measurement. Those figures are withdrawn and are not reproduced anywhere in
+this paper, including as a comparison, because the checkpoint they describe is void. The
+canonical figures are in Appendix~\ref{app:lengths}.
+
+Both failures were caught by re-reading the artefacts rather than the prose describing
+them. That is the practice the rule encodes: a provenance claim is verified against the
+file, never inherited from a summary.
+
 \section{Judge prompts and rubrics}
 \label{app:prompts}
 

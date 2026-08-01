@@ -1162,6 +1162,7 @@ true effect measures as an 8-point reduction**. A recall-sensitivity sweep repla
 **REVISION 7 — over-refusal is descriptive, not a passed test.** 60 benign items is all the
 frozen suite has; power for the 5-point tolerance is **0.20** and the bootstrap half-width is
 **4.6–6.6 points at a true difference of zero** — wider than the tolerance. More seeds cannot
+**[CORRECTED 2026-08-01 — this figure is WRONG. The computed value is 5.3-8.5 points; see preregistration.md AMENDMENT 7a and notebook/power_analysis.json. The true figure is worse than stated, which strengthens the conclusion.]** 
 help (pairing is across the 60 prompts). Reported as point estimate + 95% CI; bounded-cost
 phrased "no evidence of a large over-refusal increase"; tolerance evaluated on the **point
 estimate**, since the previous rule tested the CI upper bound and so could never be met at any
@@ -1437,3 +1438,67 @@ This is the same class of error as the label-provenance failure: a number entere
 was repeated by the orchestrator to the owner, and had no traceable derivation. The corrected
 figures above are hash-verified, config-verified, and state their field and n. **Any figure in
 the paper must name its field, its n, its suite hash and its adapter, or it does not go in.**
+
+---
+
+## 2026-08-01 — Cross-platform reproducibility fix: `Scripts/` to `scripts/`
+
+Found while auditing the repo against CLAUDE.md's documented layout. Git was tracking the code
+directory as **`Scripts/`** (capital S) while CLAUDE.md, every lab-notebook path, and the
+paper's Methods and reproducibility appendix all reference **`scripts\`**. On Windows this is
+invisible — the filesystem is case-insensitive and `core.ignorecase=true`, so both spellings
+resolve. **On Linux it breaks:** a reviewer cloning the repo and running the documented command
+`python scripts/train_sft.py` would get "No such file or directory", and every path in the
+reproducibility appendix would be wrong. That matters because the paper claims a peer can rerun
+the pipeline from the configs and documented commands; the claim was false for any non-Windows
+reader.
+
+**Fix.** Two-step case-only rename on disk (`Scripts` to `scripts_casefix_tmp` to `scripts`),
+then forced the git index to follow — necessary because `core.ignorecase=true` meant git did not
+notice the case change on its own. Git now records all 31 paths as `scripts/...` and reports
+them as renames, preserving history.
+
+**Verified after the change:** all 31 `.py` files present on disk; `validate_redteam.py` runs
+and reports VALIDATION PASSED; the in-flight B2 v3 training run was unaffected and continued
+advancing through its reference-log-prob precompute. Safe mid-run because no process holds the
+directory as its working directory and a case-only rename does not change path resolution on a
+case-insensitive filesystem.
+
+**Practice note for the reproducibility appendix:** documented paths must be verified against
+what version control actually records, not against what resolves on the development machine.
+Same class of error as the two provenance failures — artefact and prose had diverged, and only
+reading the artefact caught it.
+
+## 2026-08-01 — AMENDMENT 7a: the over-refusal half-width figure was wrong
+
+Reconciliation of the contradiction found while drafting Methods. `preregistration.md`
+Revision 7 quoted the bootstrap half-width at a true difference of zero as **4.6–6.6 points**.
+**That figure was wrong and has been corrected in place, visibly, with the original struck
+through rather than overwritten.** It had been transcribed by hand into
+`notebook\pending_evalharness.md` and from there into the pre-registration; it was never
+produced by `scripts\power_analysis.py`, whose output at the time already read 5.3 / 7.1 / 8.5.
+
+**Correct figure, recomputed and reproduced exactly from the seeded simulation: 5.3–8.5 points**
+at a true difference of zero (across baseline over-refusal rates of 10% / 20% / 35%, n=60 benign
+prompts, 3 seeds). Authoritative source is now `notebook\power_analysis.json`.
+
+**No decision changes.** Revision 7's conclusion — over-refusal is reported descriptively, not
+as a test that can be passed — is *strengthened*: the interval is wider relative to the 5-point
+tolerance than we had recorded, so declining to treat it as a test was even more clearly right.
+
+**Prevention:** `power_analysis.py` now emits the pre-registration-facing figure explicitly, in
+the same units and wording used in the pre-registration, and writes `power_analysis.json` for
+anything that needs to quote it. Prose must cite that file, never a remembered number.
+
+**This is the third provenance failure of the project**, and the pattern is now unmistakable:
+label provenance (κ from LLM labels in a field named `human_label`), the untraceable 73-char
+crisis figure, and now a hand-transcribed half-width. Every one was a number that entered the
+record by being *retyped* rather than *read from the tool that computed it*, and every one was
+caught by reading the artefact rather than the prose. The rule in the reproducibility appendix
+stands: a figure names its field, its n, its suite hash and its source file, or it does not go in.
+
+**Also fixed:** a markdown table in `preregistration.md` §2 had been broken by an earlier
+insertion, orphaning the Helpfulness row below the Revision 6/7 blocks. Row restored to the
+table; the Success criterion beneath it rewritten to match Revisions 6 and 7 rather than the
+superseded original wording (it still said "over-refusal increase <= 5 points" as a hard
+success condition, which Revision 7 had already replaced).

@@ -108,6 +108,16 @@ bootstrap 95% half-width on a paired difference is itself of order:
 - baseline over-refusal 20%: mean half-width **7.1 pts** at a TRUE difference of zero
 - baseline over-refusal 35%: mean half-width **8.5 pts** at a TRUE difference of zero
 
+**PRE-REGISTRATION-FACING FIGURE (quote this exact range in Methods and in
+`preregistration.md`):** the bootstrap 95% half-width is **5.3-8.5 points at a true difference of zero (range across baseline over-refusal rates of 10%, 20% and 35%; n=60 benign prompts, 3 seeds)**.
+
+> This figure is emitted by `scripts/power_analysis.py`, not transcribed. An earlier
+> hand-copied value of "4.6-6.6 points" reached `preregistration.md` and
+> `pending_evalharness.md`; it was never produced by this script and is **wrong**.
+> Corrected 2026-08-01 — see the amendment note in `preregistration.md`. The true
+> figure is WORSE than the one quoted, which strengthens rather than weakens the
+> conclusion that over-refusal must be reported descriptively.
+
 So the old rule — test the CI **upper bound** against 5 points — was unmeetable: the
 upper bound exceeds 5 even when the true difference is exactly zero. Applying the
 tolerance to the point estimate and reporting the interval beside it is the correction.

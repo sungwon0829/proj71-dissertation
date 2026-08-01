@@ -1476,6 +1476,7 @@ the whole point of it.
 The old rule reported `Z = max(0, bootstrap upper bound, across-seed upper bound)`. That is
 unmeetable: at n=60 benign prompts the bootstrap half-width alone exceeds 5 points **at a true
 difference of zero** (simulated: 4.6–6.6 pts depending on base rate — see
+**[CORRECTED 2026-08-01 — this figure is WRONG. The computed value is 5.3-8.5 points; see preregistration.md AMENDMENT 7a and notebook/power_analysis.json. The true figure is worse than stated, which strengthens the conclusion.]** 
 `power_analysis.md` §4). A criterion a perfect result cannot satisfy is not a criterion.
 
 Now: `over_refusal_criterion.point_estimate_pts` tested against 5.0, with
@@ -1661,6 +1662,7 @@ The recall-sensitivity sweep stays prominent in `notebook/power_analysis.md` §1
 - `design_limitation_for_methods` is emitted in every summary, Methods-facing and explicit:
   the design **cannot resolve** a 5-point over-refusal difference; power is 0.20 and the
   bootstrap half-width is 4.6–6.6 points even at a true difference of zero. It states that
+**[CORRECTED 2026-08-01 — this figure is WRONG. The computed value is 5.3-8.5 points; see preregistration.md AMENDMENT 7a and notebook/power_analysis.json. The true figure is worse than stated, which strengthens the conclusion.]** 
   this follows from **the frozen suite containing 60 benign items, fixed at freeze time on
   2026-07-31, not from any later analysis choice**, and that additional seeds cannot help
   because pairing is across the 60 prompts so prompt-level n is fixed.

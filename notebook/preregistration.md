@@ -27,6 +27,7 @@ direction is reported as such, not reframed.
 |---|---|---|
 | **Minimum meaningful ASR reduction** | **10 percentage points on the TRUE scale** (T vs B3) — see Revision 6 | Below this, we report the effect as not meaningful even if statistically significant. |
 | **Maximum acceptable over-refusal increase** | **5 percentage points** (T vs B3, on `benign_sensitive`) — reported descriptively, see Revision 7 | Above this, the "bounded cost" clause of the claim fails, regardless of the ASR gain. |
+| **Helpfulness** | Reported, no pre-specified threshold | Reward-model score is reported for all arms; no success criterion is attached to it. |
 
 > **REVISION 6 — dated 2026-08-01. Resolves an inconsistency between the threshold and the
 > instrument. Made before any arm was scored.**
@@ -60,8 +61,9 @@ direction is reported as such, not reframed.
 > **REVISION 7 — dated 2026-08-01. Over-refusal is reported descriptively, not as a passed
 > test.**
 > With only 60 benign items in the frozen suite, power to detect the 5-point tolerance is
-> **0.20**, and the bootstrap half-width is **4.6–6.6 points even at a true difference of
-> zero** — wider than the tolerance itself. Additional seeds cannot help: pairing is across
+> **0.20**, and the bootstrap half-width is ~~**4.6–6.6 points even at a true difference of
+> zero**~~ **[SEE AMENDMENT 7a BELOW — the correct figure is 5.3–8.5 points]** — wider than
+> the tolerance itself. Additional seeds cannot help: pairing is across
 > the 60 prompts, so prompt-level n is fixed. The suite is frozen and items cannot be added.
 > **Revision:** over-refusal is reported as a **point estimate with a 95% interval**, and the
 > bounded-cost clause is phrased as "**no evidence of a large over-refusal increase**" rather
@@ -74,10 +76,37 @@ direction is reported as such, not reframed.
 > **Stated as a limitation in Methods and Discussion:** this design cannot resolve a 5-point
 > over-refusal difference. That is a property of a 60-item benign set fixed at freeze time,
 > and it is disclosed rather than papered over.
-| **Helpfulness** | Reported, no pre-specified threshold | Reward-model score is reported for all arms; no success criterion is attached to it. |
 
-**Success** = ASR reduction ≥ 10 points AND over-refusal increase ≤ 5 points AND the
-primary test significant at α = 0.05.
+> **AMENDMENT 7a — dated 2026-08-01. Corrects a wrong number in Revision 7 above.**
+> Revision 7 quotes the over-refusal bootstrap half-width at a true difference of zero as
+> **4.6–6.6 points**. **That figure is wrong.** It was transcribed by hand into
+> `notebook/pending_evalharness.md` and from there into this file; it was never produced by
+> `scripts/power_analysis.py`, whose output at the time already read 5.3 / 7.1 / 8.5 points
+> at baseline over-refusal rates of 10% / 20% / 35%. The error is the eval-harness agent's:
+> a number was quoted that had not been read off the tool that computed it — the same class
+> of error this project has been correcting elsewhere.
+> **The correct figure, recomputed and reproduced exactly from the seeded simulation:**
+> the bootstrap 95% half-width is **5.3–8.5 points at a true difference of zero** (range
+> across baseline over-refusal rates of 10%, 20% and 35%; n=60 benign prompts, 3 seeds).
+> Authoritative source: `notebook/power_analysis.json`
+> (`over_refusal_half_width_range_pts`), emitted by the script rather than transcribed.
+> **The true figure is WORSE than the one originally quoted, not better.** Every conclusion
+> in Revision 7 therefore stands and is strengthened: the interval is wider relative to the
+> 5-point tolerance than we said, so applying the tolerance to the CI upper bound was even
+> more clearly unmeetable, and reporting over-refusal descriptively rather than as a passed
+> test is even more clearly the right call. **No decision made under Revision 7 changes.**
+> The original wrong text is struck through above rather than deleted, because this file is
+> a commitment device and an amendment to it must be visible.
+> **Prevention:** `scripts/power_analysis.py` now emits the pre-registration-facing figure
+> explicitly, in the same units and wording used here, and writes
+> `notebook/power_analysis.json` for anything that needs to quote it. Prose must cite that
+> file, never a remembered number.
+
+**Success** = ASR reduction ≥ 10 points **on the true (attenuation-corrected) scale, per
+Revision 6** AND the primary test significant at α = 0.05, **with over-refusal reported
+descriptively per Revision 7** — the 5-point over-refusal tolerance is evaluated against the
+point estimate but, at power 0.20 and a half-width of 5.3–8.5 points, is **not** treated as a
+test that can be passed or failed.
 **Bounded-failure results are still results.** If we observe, say, a 3-point reduction, the
 finding is reported as: "we powered for a 10-point effect and observed 3, bounding the
 benefit of trained-in safety at under X points on this suite." A null result is a finding,

@@ -161,6 +161,45 @@
     "makes the primary reported effect attenuation-corrected; Revision 7 makes over-refusal",
     "descriptive rather than a passed test. No judge, prompt, revision or threshold is affected",
     "and every prompt_sha256 is byte-identical to the original pin. The stale-revision check in",
-    "verify_judge_pin() correctly refused to score against the previous list before this update."
-  ]
+    "verify_judge_pin() correctly refused to score against the previous list before this update.",
+    "",
+    "RE-PINNED 2026-08-01 to add run_metadata (the seed enumeration). Instruments unchanged;",
+    "every prompt_sha256 is byte-identical."
+  ],
+  "run_metadata": {
+    "_what_this_is": "Which seeds constitute each arm. Fixed 2026-08-01, BEFORE seeds 2-3 were launched, so the set cannot be chosen after seeing results.",
+    "multi_seed_arms": {
+      "B2": [
+        1,
+        2,
+        3
+      ],
+      "B3": [
+        1,
+        2,
+        3
+      ],
+      "T": [
+        1,
+        2,
+        3
+      ]
+    },
+    "single_run_arms": {
+      "B0": [
+        42
+      ],
+      "B1": [
+        42
+      ],
+      "T_ctrl": [
+        1
+      ]
+    },
+    "seed_semantics": "Passed as `--seed N` to scripts/train_dpo.py; sets torch/random/numpy seeds and appears in the run directory name (results/<ARM>_seed<N>). B3 seed N is DERIVED from B2 seed N by scripts/apply_b3_filter.py and carries the same seed by construction.",
+    "b3_derivation": "B3 seed N = apply_b3_filter.py(B2 seed N). No training, no new seed.",
+    "t_ctrl_is_single_seed": "T_ctrl is a 1-seed control (preregistration Revision 5) and is additionally a WEAK control: it differs from T on 776 of 4,924 safety pairs (15.8%), so it bounds the safety-direction effect rather than isolating it.",
+    "evaluation_seed": "eval_generate.py decoding is greedy, so the generation seed does not affect output; the training seed is what distinguishes the arms.",
+    "KNOWN INCONSISTENCY, flagged not silently fixed": "configs/dpo_b2.yaml and configs/dpo_t.yaml both contain `seed: 42`, but the runs are launched with `--seed 1/2/3` on the command line, which overrides it. CLAUDE.md requires a run to be reproducible FROM ITS CONFIG FILE ALONE; reproducing from the config today would silently use seed 42 and produce a different model. train-runner should either set the config seed per run or remove the field so the CLI is the only source. Recorded here so the discrepancy is visible in the pinned record."
+  }
 }

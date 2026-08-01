@@ -739,7 +739,7 @@ def main():
                 "large over-refusal increase', never as a criterion passed."),
             "design_limitation_for_methods": (
                 "This design CANNOT RESOLVE a 5-point over-refusal difference. Power at the "
-                "5-point tolerance is 0.20, and the bootstrap half-width is 4.6-6.6 points "
+                "5-point tolerance is 0.20, and the bootstrap half-width is 5.3-8.5 points "
                 "even at a true difference of zero -- wider than the tolerance itself. This "
                 "follows from the frozen suite containing 60 benign items, fixed at freeze "
                 "time on 2026-07-31, NOT from any later analysis choice; additional seeds "
