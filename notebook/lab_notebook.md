@@ -1383,3 +1383,57 @@ immediately before and after and matched the freeze record
 `e14c3a24184d01cbf31bbcfa42be03104ae07b0bea1132bc5b08a177645b6689` both times;
 `validate_redteam.py` re-run: VALIDATION PASSED. No item was added, removed, or edited.
 Full report: `notebook\pending_suite_originality.md`.
+
+---
+
+## 2026-08-01 — CORRECTION: B1 response-length figures re-measured on v2; the old numbers do not reproduce
+
+The brevity figures quoted throughout this notebook and in reports to the owner — **"median
+97 chars overall, 73 on `crisis_adjacent`, versus base 1118"** — were measured on the **VOID
+v1 checkpoint**, and on re-measurement **they do not reproduce under any field or file that
+could be located**. Both problems are corrected here; the earlier numbers should not be used.
+
+**Method (zero GPU cost).** Re-measured from generations already on disk — the B1 v2
+full-suite repetition run — rather than regenerating. All three compared files were verified
+to match the frozen suite hash and to share the identical pinned decoding config
+(`do_sample=false, repetition_penalty=1.05, max_new_tokens=512`) **before** comparison, so
+this isolates the adapter rather than a decoding-config confound. Two fields are distinguished:
+`response_full_turn` (the complete assistant turn as a reader sees it, including any given
+prefix on `prefilling` items) and `response_continuation` (prefix excluded; identical to
+full_turn for every non-prefilling category).
+
+**CANONICAL FIGURES — use these. `response_full_turn`, n=300, full frozen suite.**
+
+| | B0 (base) | B1 v1 (VOID) | **B1 v2 (canonical)** |
+|---|---|---|---|
+| **overall median** | 1165 | 114 | **110** |
+| overall mean | 1224.8 | 318.8 | 298.0 |
+| `prefilling` median | 742 | 143 | 144 |
+| `persona` median | 1489 | 108 | 89 |
+| `many_shot` median | 402 | 28 | 28 |
+| **`crisis_adjacent` median** | 992 | 100 | **86** |
+| `benign_sensitive` median | 2118 | 515 | 460 |
+
+**Did the scrub-and-retrain change B1's character? No, not materially.** v1 and v2 are close on
+every category and both are dramatically shorter than base — overall median 114 → 110 against
+B0's 1165. The scrub touched 70 CounselChat answers' signature blocks, a small targeted edit
+that did not move the corpus's length distribution. The earlier "faithful arm property"
+verdict stands unrevised: B1's brevity is explained by the ESConv-dominated turn-length
+distribution, and that distribution was materially unchanged.
+
+**The Discussion argument is slightly strengthened, not weakened.** B1 v2's `crisis_adjacent`
+median is **86 chars** against B0's **992** — an **~11.5× reduction**, more pronounced than
+v1's ~9.9×. The claim that B1's crisis failure mode is *insufficient engagement* rather than
+unsafe content is better supported by v2 than by the numbers we had been quoting.
+
+**Provenance failure, recorded rather than papered over.** The old overall figure (97) is close
+to v1's `response_continuation` median (93), suggesting the original used that field. But the
+old `crisis_adjacent` figure (**73**) **does not match under either field or any file on disk**
+— v1 measures 100 under both, since `crisis_adjacent` contains no prefill items to strip. Other
+candidate files were checked (a 20-item dev-fixture run at the old `repetition_penalty=1.0`
+gives 220.5 overall / 380 crisis) and none reproduces 73. **The provenance of the 73-char figure
+could not be traced.** Base was also quoted as 1118 where the measurement gives 1165.
+This is the same class of error as the label-provenance failure: a number entered the record,
+was repeated by the orchestrator to the owner, and had no traceable derivation. The corrected
+figures above are hash-verified, config-verified, and state their field and n. **Any figure in
+the paper must name its field, its n, its suite hash and its adapter, or it does not go in.**

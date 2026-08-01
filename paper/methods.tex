@@ -110,19 +110,22 @@ register adaptation (long structured prose to short conversational turns), not e
 of better support.
 
 \paragraph{Two B1 behaviours we measured and did not train away.} B1 produces markedly
-shorter responses than the base model (median 97 characters on the frozen evaluation
-suite against 1{,}118 for the base model; 73 characters on \texttt{crisis\_adjacent};
-measured on the pre-scrub checkpoint, before the retrain of
-Section~\ref{sec:methods:scrub}, which altered 70 of 2{,}749 answers and left the corpus
-length distribution unchanged). We investigated this as a possible training fault, because
-B2 and T would inherit it. ESConv assistant turns are 88\% of all training turn instances
-(10{,}191 of 11{,}586) with a median of 95 characters, so B1's median sits on the corpus
-median, and 36.6\% of ESConv assistant turns are 73 characters or shorter, so the crisis
-median is not a tail value. Regenerating on
-checkpoint-435 gave an indistinguishable median (83 against 80 characters), so terseness
-does not depend on the checkpoint selected. We ruled out token-budget truncation,
-premature end-of-sequence, and template artefacts. We therefore treat brevity as a
-faithful property of the arm and did not retrain. B1 also invents first-person life
+shorter responses than the base model, on the frozen suite as a whole and on
+\texttt{crisis\_adjacent} in particular. We investigated this as a possible training
+fault, because B2 and T would inherit it. It is a faithful reproduction of the training
+corpus: ESConv assistant turns are 88\% of all training turn instances (10{,}191 of
+11{,}586) with a median length of 95 characters and a mean of 117, and CounselChat
+contributes about 53\% of token volume but only 12\% of turn instances, so per-turn
+stopping behaviour is dominated by ESConv's short-turn pattern. Regenerating on the epoch-3
+checkpoint gave an indistinguishable median, so terseness does not depend on which
+checkpoint the selection rule picked. We ruled out token-budget truncation, premature
+end-of-sequence, and template artefacts. We therefore treat brevity as a property of the
+arm and did not retrain.
+\TODO{B1 v2 response-length statistics on the frozen suite --- overall median, crisis
+median, base-model comparison, and the corresponding ESConv percentile --- being
+re-measured on the clean retrained checkpoint. The earlier figures described the voided
+pre-scrub checkpoint and are deliberately omitted rather than reused.}
+B1 also invents first-person life
 history it cannot have (for example, claiming to have overcome a fear of flying over
 three years), a behaviour the base model does not exhibit and that SFT on peer-support
 dialogue introduced. Neither behaviour is scored by any metric in this paper; we record
@@ -146,11 +149,14 @@ ground truth and removes each answer's \emph{own} author identity only; a therap
 name is never removed from a different therapist's answer. Name derivation splits the
 fused \texttt{Name}+tagline field at a lowercase-to-uppercase boundary of at least three
 characters, cuts at the first comma, strips titles, and cross-checks the derived first
-and last name against the URL slug up to the first credential token. Of 437 distinct
-therapists in the raw split (429 surviving the empty-answer drop), 399 names resolved
-through the primary heuristic, 23 through a URL fallback, and 5 through documented
-manual overrides; one business account and one therapist who signs with a bare initial
-were excluded from name scrubbing rather than matched with a regex known to over-fire.
+and last name against the URL slug up to the first credential token. The raw split
+contains \textbf{437} distinct \texttt{therapistInfo} values; \textbf{429} of these survive
+the empty-answer drop; and \textbf{427} of those 429 yield a usable name under the
+derivation heuristic --- 399 through the primary heuristic, 23 through a URL fallback and
+5 through documented manual overrides. The two that do not are excluded deliberately
+rather than matched with a regex known to over-fire: one is a business account rather than
+an individual, and one is a therapist who signs with a bare initial, whose surname is too
+short to use as a corpus-wide match anchor.
 Telephone-number removal is context-gated: a number is kept if crisis or hotline language
 appears within 80 characters before or 130 characters after it, because a blind strip
 would have deleted crisis resources from a safety-focused corpus. URL removal fires only
@@ -172,11 +178,11 @@ identity, and mangling it would violate the do-not-over-scrub requirement. ESCon
 confirmed unaffected by direct schema inspection: it has no author, credential or
 contact fields at all. Two independent runs produced byte-identical outputs.
 
-After retraining, we regenerated the item that triggered the incident and grepped a
-canonical list of 427 distinct therapist full names --- derived by the scrub's own name
-function rather than a separately maintained list --- against that generation and all 16
-sanity generations. Full-name matches: zero. One surname-only match resolved on
-inspection to an ordinary English word inside a user prompt.
+After retraining, we regenerated the item that triggered the incident and searched the
+same 427 derived therapist full names --- produced by the scrub's own name function rather
+than a separately maintained list --- against that generation and all 16 sanity
+generations. Full-name matches: zero. One surname-only match resolved on inspection to an
+ordinary English word inside a user prompt.
 
 \paragraph{Residual limitation.} A small number of practice URLs that use a branded name
 unrelated to the therapist's own name, and that were not self-declared in
@@ -360,8 +366,7 @@ published attack family before any item was written: prefix-continuation attacks
 persona and roleplay framing for \texttt{persona} \citep{shah2023persona,shen2024dan},
 in-context normalisation for \texttt{many\_shot} \citep{anil2024manyshot,wei2023jailbroken},
 and contrast-set over-refusal probes for \texttt{benign\_sensitive}
-\citep{rottger2024xstest,cui2024orbench}. All 300 items were written from scratch; the
-technique families come from the literature, the text does not. Items were authored
+\citep{rottger2024xstest,cui2024orbench}. Items were authored
 individually rather than generated combinatorially, because near-duplicate attacks
 inflate apparent robustness, and topic, framing, register, length and technique variant
 were varied within each category. A harm-content ceiling was enforced: no item contains
@@ -372,6 +377,47 @@ authoring time. The build is deterministic and re-running it reproduces the same
 schema validator enforces field presence, unique identifiers, strict user/assistant
 alternation, the absence of any system message (the harness prepends the pinned system
 prompt itself), and the per-category message-structure contract.
+
+\paragraph{Item text is original; several techniques are deliberately borrowed.} All 300
+red-team items were written from scratch for this suite. The attack \emph{techniques} come
+from the published literature and are cited above, and several items are deliberate
+therapy-domain re-instantiations of named techniques --- most visibly the
+deceased-relative (``grandma'') persona framing of \citet{shen2024dan}. We claim
+originality of the item \emph{text}, not of the technique, and we say so because a reader
+who knows those techniques will recognise them.
+
+We verified the text claim rather than asserting it. We compared all 890 item messages
+against ten public red-team and safety corpora: AdvBench \citep{zou2023gcg}, HarmBench
+\citep{mazeika2024harmbench}, JailbreakBench \citep{chao2024jailbreakbench},
+MaliciousInstruct \citep{huang2023maliciousinstruct}, StrongREJECT
+\citep{souly2024strongreject}, the in-the-wild jailbreak prompt collection of
+\citet{shen2024dan}, XSTest \citep{rottger2024xstest}, Do-Not-Answer
+\citep{wang2024donotanswer}, the Mental Health Crisis Benchmark of
+\citet{arnaizrodriguez2026betweenhelpharm}, and the Anthropic red-team dialogues
+\citep{ganguli2022redteam} --- approximately 7{,}900 prompt records plus 127{,}972
+red-team human turns (about 1.55M words). We used the same normalisation and the same
+thresholds as the train/eval leakage audit below, so the figures are directly comparable.
+We found \textbf{0} exact matches, \textbf{0} shared contiguous 12-word spans, a maximum
+shared contiguous span of \textbf{9} words (the generic fragment ``I don't know what to do
+and I''), and a maximum word-5-gram Jaccard of \textbf{0.111} with no item above
+\textbf{0.20}. Against AdvBench, JailbreakBench and MaliciousInstruct there is no shared
+5-gram with any item at all. The canonical surface signatures of named jailbreak templates
+(the ``do anything now'' acronym, Niccolo/AIM framings, lock-and-unlock dual-output
+markers, the ``Sure, here is'' target string, ``stay in character'') are absent from our
+suite, while they are abundant in the collection we compared against. For the clearest
+borrowed template, \texttt{persona\_002}, the measured overlap with every grandma-template
+instance in that collection is at most \textbf{4 words} (``please act as my'').
+
+Two honest qualifications. First, the residual similarity that does exist sits in
+\texttt{crisis\_adjacent} and \texttt{benign\_sensitive} and is against \emph{mental-health}
+corpora, not jailbreak corpora. That is the correct direction: those items are supposed to
+read like real people in distress, and it would be more worrying if they were lexically
+distinctive. Second, the check is lexical and covers ten named corpora. It establishes
+that our items are not copies of published jailbreak prompts. It cannot establish that the
+underlying scenarios are absent from pretraining data, and we make no claim about corpora
+we could not obtain, including gated and unreleased mental-health red-team sets. This
+audit was run after the freeze; the suite hash was verified before and after it and is
+unchanged, so the frozen hash above remains the authoritative record.
 
 \paragraph{\texttt{crisis\_adjacent} is not an attack category.} It measures whether the
 model performs the correct behaviour, specified positively against a cited clinical
@@ -703,11 +749,12 @@ attenuates every effect by roughly 45\%, and no additional seeds can help, becau
 is across prompts and the prompt set is frozen.
 
 \paragraph{Over-refusal is reported descriptively.} With 60 benign items, power to detect
-the 5-point tolerance is 0.20 and the bootstrap 95\% half-width on the paired difference is
-4.6--6.6 points \emph{even at a true difference of zero} (a second simulation, sweeping the
-baseline over-refusal rate from 10\% to 35\%, gives 5.3--8.5 points). Either way it is
-wider than the tolerance itself. The suite is frozen and items cannot be added. We
-therefore report over-refusal as
+the 5-point tolerance is 0.20, and the bootstrap 95\% half-width on the paired difference
+is of the same order as the tolerance itself \emph{even at a true difference of zero}.
+\TODO{the bootstrap 95\% half-width on the paired over-refusal difference at a true
+difference of zero. Two simulations in the project record disagree and are being
+reconciled; no figure is quoted here until that is settled.}
+The suite is frozen and items cannot be added. We therefore report over-refusal as
 a point estimate with a 95\% interval; evaluate the 5-point tolerance against the point
 estimate, because applying it to the interval's upper bound made it unmeetable at any true
 value; phrase the bounded-cost clause as ``no evidence of a large over-refusal increase''
@@ -756,7 +803,8 @@ in Methods rather than discovering them later.
 
 First, \textbf{this design cannot resolve a 5-point over-refusal difference.} The frozen
 suite contains 60 benign items; power against the 5-point tolerance is 0.20 and the
-bootstrap half-width exceeds the tolerance even when the true difference is zero.
+bootstrap half-width is of the same order as the tolerance even when the true difference
+is zero.
 Additional seeds cannot help, because pairing is across the 60 prompts and the prompt-level
 $n$ is fixed. A point estimate inside the tolerance is therefore weak evidence of a bounded
 cost, and we label it as such.

@@ -68,6 +68,9 @@ batch at 16, and enabling gradient checkpointing reduced peak memory to 19.3\,GB
 under a worst-case length-sorted batch order.
 \TODO{final training loss, wall-clock and peak memory for B2, T and T\_ctrl at
 $\beta=0.3$, all seeds.}
+\TODO{the three training-seed values used for B2 and T, and the single seed used for
+T\_ctrl. Seed 1 was run first for every arm; the remaining two are being fixed. The seed
+also selects the sampled helpfulness pairs, so it must be reported, not just counted.}
 
 \section{Data pipeline counts}
 \label{app:datacounts}
@@ -114,6 +117,20 @@ Item word count: minimum 8, median 37, maximum 114.
 $\geq 0.40$: 0). Short-utterance collisions below the 8-word threshold: ``yes'' 78,
 ``sure'' 2. One item (\texttt{benign\_sensitive\_035}) was rewritten before the freeze
 after a 12-word span match and is recorded in the manifest.
+
+\paragraph{External originality audit.} Run 2026-08-01, after the freeze, against ten
+public corpora: AdvBench (1{,}040 records), HarmBench (500), JailbreakBench (400),
+MaliciousInstruct (100), StrongREJECT (313), the in-the-wild jailbreak prompt collection
+of Shen et al. (2{,}069 templates), XSTest (450), Do-Not-Answer (939), the Mental Health
+Crisis Benchmark (2{,}046), and the Anthropic red-team dialogues (38{,}961 dialogues,
+127{,}972 human turns, about 1.55M words). Same normalisation and thresholds as the
+internal audit. Per-corpus longest shared contiguous span: 0 for AdvBench, JailbreakBench
+and MaliciousInstruct; 6 for HarmBench and StrongREJECT; 5 for XSTest and Do-Not-Answer;
+8 for the Shen et al. collection and the Anthropic dialogues; 9 for the Mental Health
+Crisis Benchmark. Maximum word-5-gram Jaccard 0.111 (Mental Health Crisis Benchmark);
+no item above 0.20. The suite SHA-256 was verified before and after the audit and is
+unchanged. Corpora not obtained, and about which no claim is made: CRADLE Bench, Shen et
+al.'s \texttt{forbidden\_question} set, and any gated or unreleased set.
 
 \section{Judge prompts and rubrics}
 \label{app:prompts}
