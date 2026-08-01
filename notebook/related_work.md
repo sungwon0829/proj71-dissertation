@@ -124,6 +124,12 @@ unpublished beyond arXiv as of this search).
   measured over-refusal/utility cost," which our B2-vs-T (not B3-vs-T) internal contrast
   would also show, but their paper stops short of the filter comparison that is our
   headline claim.
+- **Hyperparameter addendum (2026-08-01, DPO-degeneration search — see the "hyperparameter
+  comparator" supplementary note appended at the end of this file):** the
+  HPAI-BSC/Qwen2.5-7B-Instruct-Egida-DPO model card (Hugging Face) lists **full
+  fine-tuning** (not LoRA), **learning_rate ≈ 1e-7**, batch size 8, trained ~1.59h on 4×
+  H100 64GB. This is 1–2 orders of magnitude lower than our LoRA DPO learning rate
+  (5e-6) and is full-parameter rather than adapter-based.
 
 ```bibtex
 @article{garciagasulla2025efficient,
@@ -1454,7 +1460,7 @@ v1 arXiv Oct 2025, v2 Jan 2026). arXiv:2510.23845.
 | 30 | Automated Clinical AI Red Teaming (Steenstra et al., 2026) | No | No | No (simulated-session risk grading) | No | No | adjacent |
 | 31 | MHSafeEval (Lee et al., 2026) | No | No | **Yes** | No | No | closest neighbour, not same |
 | 32 | Multi-Objective Alignment / MODPO (Beikzadeh et al., 2026) | **Yes, DPO** | No | No | No | Preference-based only | overlaps method, not comparison |
-| 33 | AI Safety Training Can be Clinically Harmful (Suhas BN et al., 2026) | No (evaluates RLHF-trained deployed models) | No | No | No (protocol-fidelity instead) | No | adjacent (Discussion citation) |
+| 33 | AI Safety Training Can be Clinically Harmful (Suhas BN et al., 2026) | No (evaluates RLHF-trained deployed models) | No | No (protocol-fidelity instead) | No | No | adjacent (Discussion citation) |
 | 34 | PsychEthicsBench (Shen et al., 2026) | No | No | No | No (refusal-rate finding only) | No | adjacent |
 | 35 | MindGuard (Farinhas et al., 2026) | No | Guardrail vs. guardrail only | **Yes** (guardrail-vs-guardrail) | No | No | neighbours B3 arm |
 | 36 | PAIR-SAFE (Kim et al., 2026) | No | Runtime audit, not compared to training-time | No | No | No | neighbours B3 arm |
@@ -1504,3 +1510,604 @@ filter, general domain, single attack category), Lee et al. "MHSafeEval" (therap
 adversarial ASR evaluation, no training arm), and Beikzadeh et al. "Multi-Objective
 Alignment" (therapy-domain DPO-with-safety-dimension, no adversarial suite, no filter
 baseline). This is evidence only; the main thread makes the novelty call.
+
+---
+
+## Search: DPO degeneration angle (2026-08-01, lit-scout)
+
+**Trigger:** B2 v3 (beta=0.3) measures 14.3% strict / 23.7% loose repetition on the frozen
+300-item suite and is REJECTED; B2 v2 (beta=0.1) was rejected earlier on an 8-prompt
+qualitative check (4/8 degenerate, plus a distinct "fabricates its own User: turns"
+pathology absent at beta 0.3); B1 (SFT-only) baseline is 3.0% strict / 6.0% loose. This
+search is **not** about the safety-DPO-vs-guardrail novelty claim — it is infrastructure
+literature to fix a training pathology before B2/T can produce a valid paper number. No
+"escalate loudly" trigger applies here (this angle has no comparison-arm novelty question);
+findings below are reported as engineering-relevant evidence for the main thread's decision
+on beta/loss-type/data-filtering choices, not as a novelty verdict.
+
+**Headline finding, stated up front:** the literature converges on **three independent,
+partially-overlapping explanations** for what is being observed, and — critically for
+schedule — **all of the standard mitigations found are single-flag or single-field changes
+in TRL's `DPOConfig`, confirmed against the currently-published TRL `DPOTrainer`/`DPOConfig`
+docs** (see the TRL-API note at the end of this section; **the project's exact installed
+TRL 1.9.0 was not independently re-verified against this list — read the installed source
+before committing to a flag, per this project's own standing practice**, e.g. the DPO-config
+note in `lab_notebook.md` 2026-07-31 that explicitly reads installed TRL source rather than
+assuming behaviour). None of the mitigations below require writing a new loss function,
+a new trainer subclass, or a new data pipeline beyond straightforward filtering — this
+matters given the ~2.5h/run cost and the ~3-week runway to results lock.
+
+**The three explanations, and how they connect to the beta=0.1-vs-0.3 asymmetry observed:**
+
+1. **Reward/likelihood over-optimisation that is *not* simply "further from reference =
+   worse."** Rafailov et al. ("Scaling Laws for Reward Model Overoptimization in Direct
+   Alignment Algorithms," arXiv:2406.02900, 2024) show DPO/IPO/SLiC all degrade with
+   training progress and that degradation is driven by KL budget (β) in a way that is
+   **non-monotonic and can occur within a single epoch** (peak quality at ~25% of one
+   epoch's data in their tighter-KL runs, degrading thereafter even while reward-model
+   score keeps rising) — i.e. more training steps at a *fixed* β is itself already enough
+   to walk into a worse regime, independent of which β was chosen. This directly bears on
+   the project's single-epoch, fixed-step-count design: it is not guaranteed that "fewer
+   steps would look like beta 0.1" — early-training and late-training checkpoints at the
+   *same* β can already differ qualitatively, so if degeneration is checked only at the
+   end of the 1-epoch run, an earlier checkpoint might already be much better without
+   changing β at all. **Concrete, checkable, cheap experiment implied by this paper: log
+   the loose/strict repeat rate against a validation subset at intermediate checkpoints
+   within the existing runs, not just at the end — no retrain required if checkpoints are
+   already being saved.**
+
+2. **Likelihood displacement — chosen-response likelihood can fall even while the
+   preference margin (reward gap) rises**, which is consistent with the log-ratio numbers
+   already recorded (reward margin *rose* from beta 0.1→0.3 — 8.3→13.0 — while the
+   underlying log-ratio *shrank*, 83→43; the reward is beta × log-ratio, so a bigger
+   apparent "margin" at higher beta is compatible with a *smaller*, not larger, absolute
+   movement of the policy, yet degeneration got *worse*, not better, at beta 0.3 — this is
+   the specific asymmetry the literature best explains). Razin, Malladi, Bhaskar, Chen,
+   Arora, Hashimoto ("Unintentional Unalignment: Likelihood Displacement in Direct
+   Preference Optimization," arXiv:2410.08847, **ICLR 2025**, peer-reviewed) prove
+   displacement is driven by how similar the chosen/rejected completions are in embedding
+   space (their CHES — centered hidden embedding similarity — score), and demonstrate a
+   real safety consequence: DPO-aligning Llama-3-8B-Instruct to refuse unsafe prompts
+   **reduced its refusal rate from 74.4% to 33.4%** due to displacement redirecting
+   probability mass from the "No" refusal token toward an unintended "Yes" continuation.
+   Their fix is **data-side, not loss-side**: filter out training pairs whose chosen/
+   rejected completions are too embedding-similar (compute CHES, drop high-CHES pairs).
+   This is directly actionable on `pref_helpful.jsonl`/`pref_safety.jsonl` before the next
+   training run, and does not touch `loss_type` or `beta` at all.
+
+   **CORRECTION (2026-08-01, second lit-scout pass, cross-checked directly against the
+   arXiv abstract page rather than a prior summary): the paper's sixth/last author is
+   Boris Hanin, not "Hashimoto, Tatsunori" as recorded above and in the bibtex entry
+   `razin2025likelihooddisplacement` below.** Full confirmed author order: Noam Razin,
+   Sadhika Malladi, Adithya Bhaskar, Danqi Chen, Sanjeev Arora, Boris Hanin. The bibtex
+   entry in this file's own bibliography section is therefore **wrong and must be fixed**
+   before this paper is cited in the dissertation — flagged here explicitly rather than
+   silently edited, since this file is a shared, appended log and the error is already
+   duplicated into a citable BibTeX block below.
+
+3. **A specific, mechanistic account of *why* DPO becomes "unlikelihood training" (pure
+   repetition-inducing suppression of the rejected sequence) under some conditions**: the
+   DPO gradient is a *weighted* contrastive update, where the weight is
+   `σ(β·(margin))`'s complement — examples the model already gets confidently right
+   contribute almost no gradient, so a model that has become confident (larger β, or later
+   in training) effectively spends its remaining gradient budget almost entirely on the
+   *hardest*, least-separated pairs, which is exactly where Razin et al.'s displacement
+   risk is concentrated. Feng, Qin, Huang, Zhang, Lei ("Towards Analyzing and Understanding
+   the Limitations of DPO: A Theoretical Perspective," arXiv:2404.04626, 2024, preprint —
+   **venue not confirmed as peer-reviewed**, appears widely cited but only checked at
+   arXiv here) independently derive, via a gradient-field analysis, that **DPO's loss
+   decreases the probability of the *dispreferred* response faster than it increases the
+   probability of the *preferred* one** — a structural asymmetry that, combined with (2),
+   is consistent with a model that suppresses fluent continuation probability broadly
+   enough to fall into repetition loops rather than cleanly separating chosen from
+   rejected. A community technical report (not peer-reviewed — flagged explicitly, see
+   caveat below) states this mechanism even more bluntly: "without the sigmoid weighting,
+   DPO degrades to unlikelihood training, which causes repetitive, degenerate text" —
+   cited here only as a plain-language gloss of the same mechanism the peer-reviewed
+   papers above derive formally, not as an independent source of authority.
+
+**Root cause specific to this project's setup (edit distance / near-duplicate pairs),
+independently corroborated by a second, directly-actionable paper:** Pal, Karkhanis,
+Dooley, Roberts, Naidu, White ("Smaug: Fixing Failure Modes of Preference Optimisation with
+DPO-Positive," arXiv:2402.13228, 2024, preprint) show theoretically and empirically that
+**standard DPO can reduce the model's likelihood of the *preferred* completion whenever the
+relative probability between preferred and dispreferred still increases** — and that this
+failure mode is worst specifically for **low-edit-distance** chosen/rejected pairs (i.e.
+pairs that differ by only a few tokens/words). This is worth flagging against the
+`pref_safety.jsonl` provenance already logged in `lab_notebook.md` (PKU-SafeRLHF pairs,
+"chosen" = only the *safer of the pair*, not a curated ideal) — PKU-SafeRLHF pairs are
+not guaranteed to be high-edit-distance, and a spot audit of edit distance in the safety
+pairs (and the helpfulness pairs) would tell you whether this specific failure mode is live
+in this data before assuming it's purely a beta/hyperparameter issue. Their fix, **DPOP**,
+adds a corrective penalty term to the loss (a genuinely new loss, not a flag) — **this is
+the one mitigation on this list that is not a simple TRL config change**; TRL's built-in
+loss-type list (below) does not include a `dpop` option as of the fetched docs, so using it
+would require a custom loss function, which conflicts with the "identical across B2/T/T_ctrl,
+no per-arm tuning" hard constraint only in the sense that it is more engineering risk to
+verify identically across three arms under schedule pressure — flagged as higher-cost than
+the alternatives below, not ruled out.
+
+**Length/verbosity-specific literature (secondary relevance — the observed pathology is
+repetition-loop degeneration, not simple verbosity, but the same beta/KL mechanism is
+implicated and the TRL flags overlap):** Rafailov et al. (arXiv:2406.02900, above) find
+DAAs (DPO, IPO, SLiC) exhibit length exploitation as one concrete symptom of
+over-optimisation. Park, Rafailov, Ermon, Finn ("Disentangling Length from Quality in
+Direct Preference Optimization," ACL Findings 2024, peer-reviewed, arXiv:2403.19159)
+independently confirm significant length exploitation in DPO specifically and propose a
+length-regularised objective (R-DPO) with up to 20% win-rate improvement when controlling
+for length — **this requires a modified loss term**, not currently a named `loss_type` in
+the TRL docs fetched (TRL's closest built-ins are `ld_alpha`, `use_weighting`, and
+`sigmoid_norm`, described below, which are inspired by adjacent but not identical papers).
+Lu, Li et al. ("Eliminating Biased Length Reliance of Direct Preference Optimization via
+Down-Sampled KL Divergence," EMNLP 2024, peer-reviewed, arXiv:2406.10957) attribute length
+bias to a **sequence-level KL discrepancy that scales with token count** and propose
+token-level down-sampling (SamPO); reported gains of 5–12% over DPO on length-debiased
+reward. Meng, Xia, Chen ("SimPO: Simple Preference Optimization with a Reference-Free
+Reward," NeurIPS 2024, peer-reviewed) use **length-normalised** log-probability as the
+reward itself (no reference model at all), reporting up to 6.4 pts AlpacaEval-2 / 7.5 pts
+Arena-Hard over DPO; TRL exposes this directly as `loss_type="sigmoid_norm"` (confirmed in
+the docs fetch below — "the SimPO authors address the length-bias in the original sigmoid
+loss by normalizing by the number of non-mask tokens"). Gu et al. ("Length Desensitization
+in Direct Preference Optimization" / LD-DPO, arXiv:2409.06411, 2024, preprint) propose a
+token-weighting scheme for the "verbose" tail of a response, reporting 10–40% shorter
+responses than DPO at matched quality; TRL exposes this directly as the `ld_alpha` float
+parameter (confirmed in the docs fetch below).
+
+**Data-filtering mitigations, orthogonal to the loss function (no loss change at all —
+config/data-pipeline only):** Morimura, Sakamoto, Jinnai, Abe, Ariu ("Filtered Direct
+Preference Optimization," EMNLP 2024, peer-reviewed, arXiv:2404.13846) show DPO is *more*
+sensitive to noisy/low-quality preference pairs than reward-model-based RLHF, and propose
+fDPO: use a trained reward model to monitor and drop low-quality pairs from the training
+set during DPO, reporting improved final performance (no exact percentage independently
+extracted here — flagged as unverified beyond the qualitative direction). This requires an
+auxiliary reward model already present in the project (`PsychoCounsel-Llama3-8B-Reward`, or
+equivalently `beaver-dam-7b` for the safety side) and a filtering pass on
+`pref_helpful.jsonl`/`pref_safety.jsonl`, not a new loss.
+
+**Noise/label-smoothing mitigations, a straight TRL config flag:** Mitchell's original DPO
+codebase note ("A note on DPO with noisy preferences & relationship to IPO," Eric Mitchell,
+2023, **a technical note/blog-style PDF, not a peer-reviewed paper** — cited as such,
+`ericmitchell.ai/cdpo.pdf`) introduces **conservative DPO (cDPO)**: assume a small fraction
+ε of preference labels are flipped, which mathematically reduces to adding
+`label_smoothing=ε` to the standard sigmoid DPO loss (ε=0 recovers vanilla DPO). Chowdhury,
+Kini, Natarajan ("Provably Robust DPO: Aligning Language Models with Noisy Feedback,"
+arXiv:2403.00409, 2024, preprint — venue not confirmed) independently derive a related,
+provably-unbiased loss under random label noise, exposed in TRL as `loss_type="robust"`
+with the *same* `label_smoothing` field reinterpreted as the label-flip probability
+(recommended ≈0.1 per the TRL docs' citation of the paper). **Both are one-line config
+changes** (`label_smoothing=X` with `loss_type="sigmoid"` for cDPO, or `loss_type="robust"`
+for the provably-robust variant), require no data pipeline change, and — because they only
+add a smoothing/robustness term rather than changing which examples are used — are the
+cheapest thing on this list to apply **identically across B2/T/T_ctrl** without risking a
+per-arm confound, which matters given the project's explicit "no per-arm tuning" constraint.
+
+**IPO — a fundamentally different loss, not a flag on top of sigmoid, but natively
+supported:** Azar et al. ("A General Theoretical Paradigm to Understand Learning from Human
+Preferences," arXiv:2310.12036, 2023/AISTATS 2024, peer-reviewed) show DPO's sigmoid/
+logistic loss can overfit and drive the reward margin unboundedly large when preferences
+are close to deterministic (exactly the "margins ~8.3 → ~13.0" pattern being observed),
+because the underlying Bradley-Terry reward is undefined/ill-posed once labels are
+near-certain and the model exploits this rather than respecting the reference-model KL
+term. **IPO replaces the sigmoid/log-loss with a bounded squared-error-style objective**
+that targets a fixed margin (1/2) rather than trying to push the margin to infinity, which
+directly targets "the model keeps moving unboundedly far from the reference despite a
+nominal beta" — the mechanism underlying this project's headline question of why the KL
+term doesn't obviously bound this. TRL exposes this as `loss_type="ipo"` (confirmed below;
+`beta` is reinterpreted as the IPO regularisation parameter τ when this loss is selected) —
+**a one-line `loss_type` change, no data pipeline change, no custom loss code.**
+
+**RPO-style DPO+NLL hybrid — available in current TRL via multi-loss combination, but the
+parameter name has changed and needs live verification against the installed 1.9.0:** Pang,
+Yuan, Cho, He, Sukhbaatar, Weston ("Iterative Reasoning Preference Optimization,"
+NeurIPS 2024, peer-reviewed, arXiv:2404.19733) show that adding a **negative log-likelihood
+(NLL) term on the chosen completion**, on top of the standard DPO loss, is "crucial" — pure
+DPO alone underperforms, and the NLL term anchors the chosen-response likelihood so it
+cannot fall the way likelihood displacement (see above) predicts. **This is the mechanism
+most directly aimed at "chosen-response likelihood falling during DPO."** In the TRL
+`DPOTrainer` docs fetched during this search (see API note below), this is available via
+TRL's **multi-loss combination** mechanism — `loss_type=["sigmoid", "sft"]` with
+`loss_weights=[1.0, α]` — rather than a single `rpo_alpha` scalar; **older TRL
+versions/tutorials may reference an `rpo_alpha` field directly, so this must be checked
+against the actual installed 1.9.0 signature before use, per this project's standing rule
+of reading installed source rather than copying blog-post-era arguments.**
+
+**TRL `DPOConfig` API note (fetched from the current published Hugging Face TRL docs
+during this search; NOT independently re-verified against the project's pinned TRL
+1.9.0 — flagged explicitly as a to-do before any config is written):**
+- `beta` (float, default 0.1): "Higher β means less deviation from the reference model."
+  For `loss_type="ipo"`, `beta` is reinterpreted as IPO's τ.
+- `loss_type` (list[str], default `["sigmoid"]`): confirmed available values include
+  `sigmoid`, `hinge`, `ipo`, `exo_pair`, `nca_pair`, `robust`, `bco_pair`, `sppo_hard`,
+  `aot`/`aot_unpaired`, `apo_zero`/`apo_down`, `discopop`, `sft`, `sigmoid_norm`. Multiple
+  entries can be combined with `loss_weights` (documented MPO-style use: e.g.
+  `loss_type=["sigmoid","bco_pair","sft"], loss_weights=[0.8,0.2,1.0]`).
+- `label_smoothing` (float, default 0.0): cDPO-style noise-robustness under `sigmoid`
+  (recommended ~0.1 per Robust DPO) or EXO-style label smoothing under `exo_pair`
+  (recommended ~1e-3).
+- `ld_alpha` (float, optional): LD-DPO-style down-weighting of "verbose" token log-probs
+  beyond the shared chosen/rejected length; `1.0` = no weighting (vanilla DPO), `0.0` =
+  masks tokens beyond the shared length entirely.
+- `use_weighting` (bool, default False): WPO-style (Zhou et al., arXiv:2406.11827)
+  reweighting of pairs by the policy's own length-normalised sequence probability, aimed at
+  the off-policy/on-policy distributional gap rather than degeneration directly.
+- `f_divergence_type` (default `reverse_kl`; also `forward_kl`, `js_divergence`,
+  `alpha_divergence`): generalises the KL penalty itself for a subset of loss types
+  (`sigmoid`, `sigmoid_norm`, `hinge`, `ipo`, `exo_pair`, `robust`, `discopop`, `sft`) —
+  worth noting since the project's core question ("why does DPO drift far from reference
+  despite a KL term") is partly a statement about *which* divergence is being enforced.
+- No `dpop`/DPO-Positive loss type was found in the fetched docs — DPOP would require
+  custom loss code, not a flag.
+- **Additional field confirmed by a second, independent docs fetch (2026-08-01): `beta`
+  defaults to 0.1 and `learning_rate` defaults to `1e-6` — explicitly documented as
+  different from `TrainingArguments`'s general 5e-5 default, "because DPO is sensitive to
+  hyperparameters." The docs further state: "when training adapters, you typically use a
+  higher learning rate (≈1e-5) than full fine-tuning since only new parameters are being
+  learned," i.e. TRL's own published guidance is that a LoRA/PEFT run should use a
+  *higher*, not lower, learning rate than a full-fine-tuning run — this project's 5e-6 is
+  roughly 5x below that guidance figure, and roughly 5x above the library's full-FT-style
+  default. Also confirmed: when `peft_config` is supplied and `ref_model=None`, "the
+  trainer will automatically use the initial policy corresponding to `model`, i.e. the
+  model state before DPO training starts" as the reference policy — i.e. this project's
+  B1-adapter-as-its-own-frozen-reference design is exactly TRL's documented standard PEFT/
+  DPO code path (matching Rafailov et al. 2023's original SFT-checkpoint-as-reference
+  design), not a custom or unusual configuration. This directly answers one of the
+  project's original questions: the *reference-model choice* is not an unusual source of
+  risk here; if anything is unusual it is the narrowness of the specific SFT distribution
+  being used as that reference (see the LoRA-capacity and mode-collapse notes below), not
+  the mechanism of reference selection itself.**
+- **Caveat, stated plainly:** this list was fetched from what appears to be the *current*
+  published TRL docs during this search session, which may be ahead of or behind the
+  project's pinned TRL 1.9.0 (CLAUDE.md already warns that TRL is a fast-moving dependency
+  and tutorials/blog posts get out of sync with the installed version). Before writing any
+  config, `train-runner` should read the installed `trl/trainer/dpo_config.py` source
+  directly to confirm every field name above (`loss_type`, `label_smoothing`, `ld_alpha`,
+  `use_weighting`, `beta`, `learning_rate`, and whether `rpo_alpha` exists as a separate
+  field or only via the `loss_type=["sigmoid","sft"]` combination) rather than trusting
+  this fetch. This is the same discipline already applied elsewhere in this project (e.g.
+  the `is_trainable=True` finding and the `get_training_chat_template` fallback finding
+  logged in `lab_notebook.md`), extended here because a wrong assumption about the
+  loss/config signature is exactly the kind of silent-failure mode CLAUDE.md warns about.
+
+**Direct answer to "why can DPO drive the policy far from reference despite the KL term,"
+synthesising the above:** the nominal `beta`-weighted KL term in the DPO loss is a penalty
+computed only on the two observed completions (chosen, rejected) per example, not a
+constraint over the full output distribution — so gradient steps can push probability mass
+onto sequences *never scored by the loss at all* (Razin et al.'s displacement finding, and
+Rafailov et al.'s "out-of-distribution extrapolation" framing, both point at this same gap).
+Practically, the "beta constrains deviation" intuition holds in an aggregate/expectation
+sense (confirmed by this project's own reward-margin/log-ratio numbers: log-ratio shrank
+83→43 going from beta 0.1→0.3, i.e. beta 0.3 *did* keep the model closer to the reference on
+the *scored* tokens) but does not hold pointwise for whichever tokens the loss never directly
+constrains — which is exactly where a repetition loop lives. This is why raising beta
+(nominally "more conservative") did not fix and in this project's own data made worse the
+degeneration: it shrinks movement on the *scored* chosen/rejected tokens while the failure
+mode is concentrated in the *unscored*, freely-drifting continuation space. This synthesis
+is this agent's own connecting of the papers above to the project's specific beta 0.1-vs-0.3
+numbers — it is not a claim any single cited paper makes in these exact terms, and should be
+labelled as such (an inference, not a direct citation) if used in the paper's Discussion.
+
+**A second, independent mechanistic account for the same directional asymmetry (added
+2026-08-01, supplementary pass — see "Supplementary note" below for the fuller writeup):**
+Sahoo, Chadha, Jain, Chaudhary ("Pessimism's Paradox: Conservative Offline Training
+Amplifies Reward Hacking During Online Adaptation in Reasoning Models," ICML 2026 workshop,
+arXiv:2606.30627) find, in a different setting (Qwen3-14B, offline DPO followed by online
+reward-model adaptation on GSM8K, not our offline-DPO-then-static-eval setting), that
+**higher β compresses policy entropy into a narrower output manifold**, and that this
+narrower manifold is *more* exploitable/fragile despite responses lying nominally closer to
+a reference distribution. This is offered as converging, though not directly transferable,
+support for the same-direction finding already synthesised above (entropy/diversity
+compression, not aggregate KL distance, is the operative axis) — see the supplementary
+section for full citation details and explicit caveats about domain mismatch.
+
+### Bibliography for this section
+
+```bibtex
+@article{rafailov2024scalinglaws,
+  title={Scaling Laws for Reward Model Overoptimization in Direct Alignment Algorithms},
+  author={Rafailov, Rafael and Chittepu, Yaswanth and Park, Ryan and Sikchi, Harshit and Hejna, Joey and Knox, Bradley and Finn, Chelsea and Niekum, Scott},
+  journal={arXiv preprint arXiv:2406.02900},
+  year={2024}
+}
+@inproceedings{razin2025likelihooddisplacement,
+  title={Unintentional Unalignment: Likelihood Displacement in Direct Preference Optimization},
+  author={Razin, Noam and Malladi, Sadhika and Bhaskar, Adithya and Chen, Danqi and Arora, Sanjeev and Hanin, Boris},
+  booktitle={The Thirteenth International Conference on Learning Representations (ICLR)},
+  year={2025},
+  note={CORRECTED 2026-08-01: sixth author is Boris Hanin, not Tatsunori Hashimoto as originally entered here — verified directly against the arXiv abstract page.}
+}
+@article{feng2024limitations,
+  title={Towards Analyzing and Understanding the Limitations of {DPO}: A Theoretical Perspective},
+  author={Feng, Duanyu and Qin, Bowen and Huang, Chen and Zhang, Zheng and Lei, Wenqiang},
+  journal={arXiv preprint arXiv:2404.04626},
+  year={2024}
+}
+@article{pal2024smaug,
+  title={Smaug: Fixing Failure Modes of Preference Optimisation with {DPO}-Positive},
+  author={Pal, Arka and Karkhanis, Deep and Dooley, Samuel and Roberts, Manley and Naidu, Siddartha and White, Colin},
+  journal={arXiv preprint arXiv:2402.13228},
+  year={2024}
+}
+@inproceedings{park2024disentangling,
+  title={Disentangling Length from Quality in Direct Preference Optimization},
+  author={Park, Ryan and Rafailov, Rafael and Ermon, Stefano and Finn, Chelsea},
+  booktitle={Findings of the Association for Computational Linguistics: ACL 2024},
+  year={2024},
+  note={arXiv:2403.19159}
+}
+@inproceedings{lu2024sampo,
+  title={Eliminating Biased Length Reliance of Direct Preference Optimization via Down-Sampled {KL} Divergence},
+  author={Lu, Junru and Li, Jiazheng and An, Siyu and Zhao, Meng and He, Yulan and Yin, Di and Sun, Xing},
+  booktitle={Proceedings of the 2024 Conference on Empirical Methods in Natural Language Processing (EMNLP)},
+  year={2024},
+  note={arXiv:2406.10957}
+}
+@inproceedings{meng2024simpo,
+  title={{SimPO}: Simple Preference Optimization with a Reference-Free Reward},
+  author={Meng, Yu and Xia, Mengzhou and Chen, Danqi},
+  booktitle={Advances in Neural Information Processing Systems (NeurIPS)},
+  volume={37},
+  year={2024}
+}
+@article{gu2024lddpo,
+  title={Length Desensitization in Direct Preference Optimization},
+  author={Gu, Wenliang and others},
+  journal={arXiv preprint arXiv:2409.06411},
+  year={2024},
+  note={author list incomplete beyond first author — verify before citing}
+}
+@inproceedings{morimura2024fdpo,
+  title={Filtered Direct Preference Optimization},
+  author={Morimura, Tetsuro and Sakamoto, Mitsuki and Jinnai, Yuu and Abe, Kenshi and Ariu, Kaito},
+  booktitle={Proceedings of the 2024 Conference on Empirical Methods in Natural Language Processing (EMNLP)},
+  year={2024},
+  note={arXiv:2404.13846}
+}
+@misc{mitchell2023cdpo,
+  title={A Note on {DPO} with Noisy Preferences \& Relationship to {IPO}},
+  author={Mitchell, Eric},
+  year={2023},
+  note={Technical note, not peer-reviewed. \url{https://ericmitchell.ai/cdpo.pdf}}
+}
+@article{chowdhury2024robustdpo,
+  title={Provably Robust {DPO}: Aligning Language Models with Noisy Feedback},
+  author={Chowdhury, Sayak Ray and Kini, Anush and Natarajan, Nagarajan},
+  journal={arXiv preprint arXiv:2403.00409},
+  year={2024}
+}
+@inproceedings{azar2024ipo,
+  title={A General Theoretical Paradigm to Understand Learning from Human Preferences},
+  author={Azar, Mohammad Gheshlaghi and Rowland, Mark and Piot, Bilal and Guo, Daniel and Calandriello, Daniele and Valko, Michal and Munos, R{\'e}mi},
+  booktitle={Proceedings of the 27th International Conference on Artificial Intelligence and Statistics (AISTATS)},
+  year={2024},
+  note={arXiv:2310.12036}
+}
+@inproceedings{pang2024irpo,
+  title={Iterative Reasoning Preference Optimization},
+  author={Pang, Richard Yuanzhe and Yuan, Weizhe and Cho, Kyunghyun and He, He and Sukhbaatar, Sainbayar and Weston, Jason},
+  booktitle={Advances in Neural Information Processing Systems (NeurIPS)},
+  volume={37},
+  year={2024},
+  note={arXiv:2404.19733}
+}
+```
+
+### Open gaps / follow-ups (DPO degeneration angle)
+
+- **Not independently verified: whether TRL 1.9.0 as installed on `CNXLAB03` actually has
+  `loss_type="sft"` multi-loss combination, `ld_alpha`, `use_weighting`, `loss_type="ipo"`,
+  and `loss_type="robust"`/`label_smoothing` exactly as documented above.** The fetch used
+  for the API note was against the currently-published TRL docs site, not the pinned
+  package. `train-runner` (or whoever writes the next DPO config) must read
+  `trl/trainer/dpo_config.py` and `trl/trainer/dpo_trainer.py` from the actual installed
+  environment before relying on any specific flag name.
+- **The edit-distance/CHES-similarity hypothesis (Razin et al., Pal et al.) was not
+  measured against the project's own `pref_safety.jsonl`/`pref_helpful.jsonl`.** This is a
+  cheap, concrete, falsifiable check (compute embedding similarity or even simple edit
+  distance between chosen/rejected per pair, compare degenerate-arm vs non-degenerate-arm
+  distributions) that this search recommends but did not perform — it is a data-analysis
+  task, not a literature-search task, and belongs with `data-wrangler` or `eval-harness`.
+- **The "unlikelihood training" gloss** (from the non-peer-reviewed HuggingFace community
+  blog post, "Text Degeneration: A Production Failure Mode That Most Benchmarks Do Not
+  Track," Dharma-AI, no formal authorship/venue found) is cited only as a plain-language
+  restatement of the peer-reviewed Feng et al. gradient-asymmetry finding, not as an
+  independent source — do not cite the blog post's own "59.4% average reduction" figure in
+  the paper, since that number comes from an unrelated OCR-degeneration study (Nanonets-
+  OCR2 / Qwen2.5-VL, 3B–7B), not from a safety-preference or therapy-domain DPO setting, and
+  is not applicable to this project's numbers.
+- **The connecting synthesis paragraph above (why beta 0.3 is worse than beta 0.1 in this
+  project's own repetition metrics) is this agent's own inference from the cited papers,
+  not a statement made by any single cited source** — flagged explicitly per the instruction
+  not to invent authority; the main thread should treat it as a hypothesis to test (e.g. via
+  the intermediate-checkpoint check under finding 1, or the edit-distance check above), not
+  as an established fact suitable for a bare citation.
+- Did not find a peer-reviewed paper reporting DPO-induced *repetition-loop* degeneration
+  (as opposed to verbosity/length exploitation, or likelihood displacement toward an
+  unintended coherent alternative) as its primary, named phenomenon in a therapy or
+  general-instruction-tuning setting with quantitative strict/loose repeat-rate figures
+  comparable to this project's own metric. The closest are the mechanistic accounts (Feng
+  et al., Razin et al., Rafailov et al.) which explain *why* it could happen, and the
+  Dharma-AI blog post (not peer-reviewed, different domain) which reports a comparable
+  *style* of metric. This is a gap worth stating explicitly in Methods if the paper claims
+  the repetition-loop pathology itself as a novel empirical observation.
+
+---
+
+## Supplementary note: LoRA-DPO hyperparameter comparators and LoRA-rank/capacity angle
+(2026-08-01, second lit-scout pass — same trigger as the section immediately above; kept
+separate because it approaches the question from published-hyperparameter-comparison and
+LoRA-capacity angles rather than loss-mechanism angles, and largely does not duplicate the
+section above). Answers the specific questions: what learning rates/betas are actually used
+in comparable published 7B LoRA DPO setups; whether LoRA rank interacts with preference-
+optimisation stability; and whether using an already-narrow SFT adapter as its own DPO
+reference is itself unusual.
+
+**On reference-model choice (short answer: not unusual).** Rafailov et al.'s original DPO
+paper (NeurIPS 2023, arXiv:2305.18290) uses the SFT checkpoint as the reference policy in
+every experiment — this is the field-standard design this project's B1-as-reference setup
+follows, not a deviation. TRL's own documentation, cross-checked directly against the live
+docs during this pass, confirms that when `ref_model=None` and a `peft_config` is supplied,
+"the trainer will automatically use the initial policy corresponding to `model`, i.e. the
+model state before DPO training starts" — i.e. B1's own frozen adapter as reference is
+exactly TRL's documented default PEFT/DPO code path. **What is unusual about this project's
+setup is not the reference-model mechanism, but the narrowness/low-entropy of the specific
+SFT distribution (B1) being used as that reference** — B1 is deliberately terse (median
+response 97–110 chars vs base Qwen's ~1,100–1,165), a faithful reproduction of ESConv's own
+short-turn register per `lab_notebook.md`'s 2026-07-31 brevity-verdict entry, not a defect.
+
+**Published 7B-scale DPO hyperparameters found, for direct comparison against this
+project's β∈{0.1, 0.3}, lr=5e-6, 1 epoch, LoRA r=32/α=64:**
+
+| Recipe | Base model | Params updated | β | Learning rate | Epochs | Reference |
+|---|---|---|---|---|---|---|
+| **This project (B2 v2/v3)** | Qwen2.5-7B-Instruct, on B1 LoRA SFT | **LoRA r=32/α=64** | **0.1 / 0.3** | **5e-6** | **1** | B1's own frozen adapter |
+| Zephyr-7B-beta (Tunstall et al., HuggingFace, arXiv:2310.16944) | Mistral-7B (SFT'd) | **Full fine-tuning** — paper states "we did not experiment with... LoRA, but expect similar results to hold" | 0.1 | 5e-7 | 3 (after 1 epoch dSFT) | SFT checkpoint |
+| Egida-Qwen2.5-7B-Instruct-DPO (Garcia-Gasulla et al., 2025; HF model card) | Qwen2.5-7B-Instruct | **Full fine-tuning** | not published | ≈1e-7 | not published | Qwen2.5-7B-Instruct itself |
+| TRL `DPOConfig` library default | any | either | 0.1 | 1e-6 (full-FT default; docs recommend ≈1e-5 for adapters — see above) | 3 (library default) | policy pre-DPO state if `ref_model=None` |
+| Liu, Liu & Cohan, "Understanding Reference Policies in DPO" (NAACL 2025 Findings, arXiv:2407.13709) | mistral-7b, tulu-2-7b | **Full fine-tuning** | optimum found: **0.01 (mistral-7b) / 0.02 (tulu-2-7b)**; severe "model degradation" observed going *below* this, at β=0.005 | not fully extracted | 3 | SFT checkpoint |
+| AdaDPO grid (Chen, Ciobanu, Mao, Das, arXiv:2605.28440, 2026 preprint) | Llama-3-8B-Instruct | **Full fine-tuning** | grid 0.005–0.1 | grid 3e-7–1e-6 | 1 | policy pre-DPO state |
+
+**Reading the table:** every full-fine-tuning 7B DPO recipe with verifiable published
+numbers uses β≤0.1 and lr≤2e-5 — one to two orders of magnitude below this project's 5e-6 in
+several cases, though TRL's own LoRA-specific guidance (≈1e-5) sits *above* 5e-6, so this
+project's learning rate is not clearly high or low in absolute terms, only in the sense that
+**no comparator found here is both LoRA and 7B-scale simultaneously** — this remains the
+single biggest gap in validating or invalidating the exact configuration from precedent
+alone. The one paper that explicitly searched for an optimal β at 7B (Liu, Liu & Cohan)
+found an optimum an order of magnitude below the field's common default of 0.1, with
+degeneration appearing *below* that optimum (β=0.005) — the **opposite direction** from this
+project's own finding that β=0.3 degenerates worse than β=0.1. Two readings, stated as
+alternatives rather than a resolved conclusion: (a) if a low-β optimum generalises to this
+project's setting, neither 0.1 nor 0.3 may be inside the good region, and a diagnostic run
+at β≈0.02–0.05 is a concrete, literature-motivated next step distinct from choosing between
+0.1 and 0.3; (b) that paper is full-fine-tuning only, so its optimum may not transfer to a
+LoRA setup at all, given LoRA's lower-rank update space changes how much the policy can move
+per gradient step at a given β/lr — this should be tested on this project's own machine, not
+assumed either way.
+
+**On LoRA rank / capacity interacting with preference-optimisation stability:** no paper
+found directly tests LoRA-rank sensitivity for DPO specifically. The closest, and the reason
+this is flagged as a real but unconfirmed hypothesis rather than a citation-backed fact:
+Biderman et al., "LoRA Learns Less and Forgets Less" (TMLR, Aug 2024, Featured
+Certification, peer-reviewed, arXiv:2405.09673) show, for SFT and continued pretraining
+only (**no DPO tested**), that full fine-tuning learns weight perturbations with effective
+rank 10–100× higher than typical LoRA configurations, and that LoRA "learns less" within
+the target domain as a direct consequence of this capacity gap. This project's DPO run sits
+inside a rank-32 update space layered on top of an already rank-32-constrained B1 adapter
+(the LoRA update for B2/T is a further adaptation of an adaptation, not a fresh rank-32
+budget against the base model) — a plausible contributing factor to why a nominally
+standard β/lr combination behaves differently here than in the full-fine-tuning comparators
+above, but this is this project's own inference connecting two separate literatures (LoRA
+capacity constraints; DPO instability), not a claim either source paper makes about the
+other. State as a hypothesis in Discussion/Limitations, not as an established mechanism.
+
+**On why higher β made degeneration worse here specifically (converging evidence, different
+domain — full citation, complementing the "Direct answer" synthesis in the DPO-degeneration
+section above):** Sahoo, Chadha, Jain, Chaudhary, "Pessimism's Paradox: Conservative Offline
+Training Amplifies Reward Hacking During Online Adaptation in Reasoning Models" (ICML 2026
+workshop on Decision-Making from Offline Datasets to Online Adaptation, peer-reviewed
+workshop paper, arXiv:2606.30627) find a three-link causal chain in their own setting
+(Qwen3-14B policy, offline DPO at three β levels, then online adaptation against a
+3×Qwen3-1.7B reward ensemble on GSM8K): (i) higher β compresses policy entropy into a
+narrower output manifold; (ii) the resulting low-diversity responses cluster closer, in
+embedding space, to the reward model's training distribution; (iii) despite this apparent
+proximity, ensemble disagreement (epistemic uncertainty) about those responses *increases*
+with β, and that uncertainty gap is what gets exploited fastest. **Explicitly flagged
+caveats:** different domain (reasoning/math, not chat/counseling), different training
+regime (online adaptation after offline DPO, not this project's simple offline-DPO-then-
+static-eval), model family adjacent but not identical (Qwen3, not Qwen2.5), and whether
+LoRA or full fine-tuning was used was not confirmed in the material fetched. Offered as a
+second, independent mechanistic account converging on the same direction (entropy/diversity
+compression as the operative axis, not aggregate KL/log-ratio distance) as the synthesis
+already written in the DPO-degeneration section above — not as a proven transfer to this
+project's setting. A concrete, cheap diagnostic this suggests: measure per-token output
+entropy (not just the pass/fail strict/loose repeat-rate detectors) on B2 v2 vs v3
+generations, since a repetition loop is definitionally a very-low-entropy output mode and
+this would test the mechanism directly rather than only its symptom.
+
+**Weak practitioner-level corroboration that this symptom (DPO-induced token-repetition,
+worsening with training, absent from the pre-DPO checkpoint) has been independently
+reported before, flagged as anecdotal, not citable as an academic source:** GitHub issue
+`huggingface/trl#1025`, "DPO models generate multiple / corrupted responses" (opened Nov
+2023, no maintainer diagnosis or fix visible in the fetched thread). Reported setup: a
+T5-family encoder-decoder model (**architecture mismatch — not a decoder-only 7B chat
+model**), LoRA r=8/α=16/dropout=0.05, β=0.1, learning rate **5e-4** (two orders of magnitude
+above this project's 5e-6, itself a plausible independent cause in that report), on a
+trivial synthetic 4-class classification task. Symptom: greedy generation degenerates into
+repeated single tokens ("a a a a a a") and, with more training, corrupted token
+concatenations ("aaacat"); the same base model with plain supervised loss (no DPO) generates
+correctly, isolating DPO training as the point of introduction — the same isolation this
+project's own B1-vs-B2 comparison already demonstrates. Cite, if at all, only as evidence
+that "DPO-induced token-repetition degeneration is a previously-reported failure signature
+in the TRL ecosystem," not as evidence bearing on root cause or fix, given the architecture,
+task, and learning-rate mismatches. Reference by URL only, not BibTeX:
+`https://github.com/huggingface/trl/issues/1025`.
+
+```bibtex
+@inproceedings{rafailov2023dpo,
+  title={Direct Preference Optimization: Your Language Model is Secretly a Reward Model},
+  author={Rafailov, Rafael and Sharma, Archit and Mitchell, Eric and Ermon, Stefano and Manning, Christopher D. and Finn, Chelsea},
+  booktitle={Advances in Neural Information Processing Systems (NeurIPS)},
+  volume={36},
+  year={2023}
+}
+@inproceedings{liu2025understanding,
+  title={Understanding Reference Policies in Direct Preference Optimization},
+  author={Liu, Yixin and Liu, Pengfei and Cohan, Arman},
+  booktitle={Findings of the Association for Computational Linguistics: NAACL 2025},
+  year={2025},
+  note={arXiv:2407.13709}
+}
+@article{biderman2024lora,
+  title={LoRA Learns Less and Forgets Less},
+  author={Biderman, Dan and Portes, Jacob and Gonzalez Ortiz, Jose Javier and Paul, Mansheej and Greengard, Philip and Jennings, Connor and King, Daniel and Havens, Sam and Chiley, Vitaliy and Frankle, Jonathan and Blakeney, Cody and Cunningham, John P.},
+  journal={Transactions on Machine Learning Research},
+  year={2024},
+  note={Featured Certification; arXiv:2405.09673}
+}
+@inproceedings{sahoo2026pessimisms,
+  title={Pessimism's Paradox: Conservative Offline Training Amplifies Reward Hacking During Online Adaptation in Reasoning Models},
+  author={Sahoo, Subramanyam and Chadha, Aman and Jain, Vinija and Chaudhary, Divya},
+  booktitle={ICML 2026 Workshop on Decision-Making from Offline Datasets to Online Adaptation: Black-Box Optimization to Reinforcement Learning},
+  year={2026},
+  note={arXiv:2606.30627}
+}
+@misc{chen2026adadpo,
+  title={{AdaDPO}: Self-Adaptive Direct Preference Optimization with Balanced Gradient Updates},
+  author={Chen, Shaolong and Ciobanu, Madalina and Mao, Qingqing and Das, Ritankar},
+  year={2026},
+  note={arXiv:2605.28440}
+}
+@article{tunstall2023zephyr,
+  title={Zephyr: Direct Distillation of {LM} Alignment},
+  author={Tunstall, Lewis and Beeching, Edward and Lambert, Nathan and Rajani, Nazneen and Rasul, Kashif and Belkada, Younes and Huang, Shengyi and von Werra, Leandro and Fourrier, Cl{\'e}mentine and Habib, Nathan and Sarrazin, Nathan and Sanseviero, Omar and Rush, Alexander M. and Wolf, Thomas},
+  journal={arXiv preprint arXiv:2310.16944},
+  year={2023},
+  note={Technical report; venue beyond arXiv not confirmed}
+}
+```
+
+### Open gaps / follow-ups (supplementary note)
+
+- **The hyperparameter comparator table above has no entry that is both LoRA and 7B-scale.**
+  This is the single largest open gap for directly validating or invalidating this
+  project's exact configuration from precedent; the recommendation is to treat the
+  literature as bounding-but-not-settling the question and to run a small, cheap diagnostic
+  on this project's own hardware (e.g. one short run at a literature-motivated lower β,
+  such as 0.02–0.05, at the existing lr=5e-6, checked against the same strict/loose repeat
+  detectors already built) rather than searching further for a nonexistent exact-match
+  paper.
+  - **Learning rate and β should not be varied in the same diagnostic run** if the goal is
+  to isolate which lever (if either) fixes the degeneration — TRL's own LoRA-lr guidance
+  (≈1e-5) and Liu/Liu/Cohan's low-β optimum (0.01–0.02) are two independent, potentially
+  competing levers found in this search, and whichever combination is ultimately chosen
+  must still be applied identically across B2/T/T_ctrl per the project's hard "no per-arm
+  tuning" constraint.
+- **The author-list correction to `razin2025likelihooddisplacement`** (Boris Hanin, not
+  Tatsunori Hashimoto, as the sixth author) was made in this pass directly against the
+  bibtex entry already present in this file from the earlier lit-scout pass — flagged
+  loudly here rather than silently edited, since the erroneous version was already written
+  into a citable BibTeX block once.
+- The "LoRA rank interacts with DPO stability" hypothesis (Biderman et al. connection) is
+  this agent's own inference, not a finding either cited paper makes about the other —
+  restated here for emphasis since it is the kind of connective claim that is easy to
+  mis-cite as if it were a direct finding.

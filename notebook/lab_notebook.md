@@ -1655,3 +1655,51 @@ reader can never be uncertain which definition produced a number.
 This is the same failure class as the label-provenance, 73-char and half-width errors: a claim
 about an artefact that was never checked against the artefact. Four instances now, all caught
 the same way — by reading the artefact rather than the prose describing it.
+
+## 2026-08-01 — Eval harness end-to-end re-score CONFIRMED; two guards hardened
+
+The one item in the harness track that had never been confirmed by execution is now confirmed.
+Run twice — before and after the metric-collision fix — so the confirmation covers final code.
+Full 300-item frozen suite, both the unfiltered and the filtered (B3) paths. Zero tracebacks.
+(An earlier "failure" notification was a `grep -c "Traceback"` exiting 1 on zero matches — a
+non-finding, not a fault.)
+
+**Confirmed working at real scale for the first time:** `[pin] VERIFIED` fires before any model
+loads; adapter provenance and rubric-field join with SHA verification; **complete** suite
+coverage (300/300 — the guard passing, not merely failing); the split endpoint with primary
+separate from crisis co-primary; the over-refusal hand-label path with its single-annotator
+caveat and judge cross-check (agreement 0.717); and `BLOCKED BY:` naming both missing human
+inputs by filename.
+**Revision 3 at real scale: 37 filter-replaced items scored safe deterministically, of which
+12 the judge would have called unsafe.** Those 12 are exactly the B3-only false positives the
+revision exists to remove — the correction is doing real work, not a hypothetical. Crisis
+remained untouched at 45.0%, per the scope guard.
+
+**GUARD GAP FOUND, on the harness's own output.** The first run printed `PAPER NUMBER: True`
+for the filtered arm with every gate legitimately passing — because `apply_b3_filter.py` can be
+pointed at any source arm and **the derived file inherits the source's `is_paper_number`**. A
+"B3" derived from B0 responses was therefore claiming paper-number status. Fixed and confirmed
+firing: `is_paper_number` is now forced false unless an arm labelled `b3` was derived from B2,
+with a banner and a named `BLOCKED BY:` entry. Same principle as the other guards — it does not
+trust the artefact it is checking.
+
+**Metric collision resolved as directed.** The harness's `degeneration_flags()` was **deleted,
+not shimmed**; `eval_score.py` now imports `sentence_repeat_count`, `ngram_repeat_frac`,
+`has_fake_turn` and the three constants from `scripts\analyze_degeneracy.py`, which is the
+single source. The detector definition — thresholds in words, source module, module SHA-256
+`8896d56521c3…` — now travels in the scored-output header beside the judge prompt hashes. **No
+`results\` artefact was affected**; the field had never reached one. Two scratchpad verification
+files carrying the old thresholds were regenerated under the canonical definition rather than
+left as a second set of numbers.
+
+**DEGENERATION x SAFETY — decided and implemented, and it constrains what we may accept.**
+On a degenerate item the **judge verdict stands** (harm delivered is harm delivered). The row
+is **flagged**, and the overlap is reported as separate statistics — `n_degenerate_and_unsafe`,
+unsafe rate among degenerate versus non-degenerate items, degenerate share of all unsafe, plus
+the item ids. **Neither number is adjusted.** Attributing all of a degenerate arm's ASR to
+safety training would be wrong: an arm that loops more scores worse partly for reasons that are
+not about alignment. If the degenerate unsafe rate greatly exceeds the non-degenerate one,
+Results must say so.
+**Consequence for the beta decision:** comparability of degeneracy *across arms* matters as much
+as its absolute level. Whatever configuration is accepted, B2, T and T_ctrl must degenerate at
+similar rates, or the difference contaminates the measured treatment effect.
