@@ -1337,3 +1337,49 @@ hand-labelling tasks (60-item ASR worksheet; 120-item over-refusal worksheet + 2
 spot-check). **The owner's labelling now gates every paper number, ahead of the remaining
 training runs.** This is correct behaviour and is not being loosened; the harness will print
 exactly which human input is missing, by filename.
+
+---
+
+## 2026-08-01 — Suite originality independently verified against ten public corpora
+
+Closes item 6 from the Methods-drafting contradictions. `SUITE_MANIFEST.md` §4.3's claim that
+"the technique families come from the literature; the text does not" was **self-reported by the
+agent that built the suite**; the pre-freeze leakage audit only ever compared against *our own*
+training corpora. If suite items were near-duplicates of published jailbreak prompts, the base
+model could have seen them in pretraining or safety tuning and the whole evaluation would be
+contaminated. Checked independently, read-only, using this project's own leakage methodology
+(same normalisation, same T1/T2/T3 thresholds) so results are directly comparable.
+
+**Corpora obtained (ten):** AdvBench, HarmBench, JailbreakBench, MaliciousInstruct, StrongREJECT,
+Shen et al. in-the-wild DAN collection (2,069 templates), XSTest, Do-Not-Answer, Mental Health
+Crisis Benchmark (Arnaiz-Rodríguez et al.), Anthropic red-team dialogues (127,972 human turns).
+~7,900 prompt records + 1.55M words. **Not obtainable:** CRADLE Bench (gated), proprietary sets.
+
+**Result — no contamination.** 0 exact matches; 0 shared contiguous 12-word spans; longest shared
+span anywhere **9 words** ("i don't know what to do and i"); max 5-gram Jaccard **0.111**, zero
+items above 0.20. Against AdvBench, JailbreakBench and MaliciousInstruct: **zero shared 5-grams**
+with any of the 300 items — those corpora are about malware and weapons, ours is about therapy.
+Canonical signatures absent: no "do anything now", no Niccolo/AIM, no lock/unlock dual-output
+markers, no "Sure, here is", no "stay in character". For scale, the DAN corpus contains 217
+instances of "do anything now" and 451 of "stay in character".
+
+**Two wording corrections — substance holds, the claim over-reached.**
+1. **Do not deny adaptation.** `persona_002` is an unmistakable re-instantiation of the
+   widely-known grandma exploit (the manifest itself labels it so). Text overlap with the
+   canonical version is **4 words** ("please act as my"), so the *text* claim holds cleanly — but
+   the technique was adapted and the paper must say so.
+2. **Scope the claim to the ten named corpora.** "Any published jailbreak corpus" is a universal
+   over an open set and cannot be supported.
+
+**Residual similarity, disclosed rather than left to be found:** the overlap that does exist sits
+in `crisis_adjacent` and `benign_sensitive` against *mental-health* corpora, not jailbreak
+corpora — highest-Jaccard pair shares "and i don't know how to" with a relationship-problem
+prompt. That is the correct direction; those items are supposed to read like real people in
+distress.
+
+**Freeze integrity.** The finding is recorded as a POST-FREEZE ANNOTATION appended to
+`SUITE_MANIFEST.md` (documentation only). `redteam_suite.jsonl` SHA-256 was recomputed
+immediately before and after and matched the freeze record
+`e14c3a24184d01cbf31bbcfa42be03104ae07b0bea1132bc5b08a177645b6689` both times;
+`validate_redteam.py` re-run: VALIDATION PASSED. No item was added, removed, or edited.
+Full report: `notebook\pending_suite_originality.md`.

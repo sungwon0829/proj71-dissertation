@@ -189,6 +189,25 @@ def main():
         W(f"- baseline over-refusal {p0:.0%}: mean half-width **{np.mean(sims)*100:.1f} pts** "
           f"at a TRUE difference of zero")
     W("")
+    # ---- THE PRE-REGISTRATION-FACING FIGURE, emitted rather than transcribed --------------
+    # A hand-copied version of this range (4.6-6.6) reached preregistration.md and was WRONG.
+    # It is now emitted here, in the same units and with the same wording the pre-registration
+    # uses, and written to a machine-readable sidecar, so the two cannot drift again. If the
+    # pre-registration and this block disagree, this block is the computed one.
+    lo_hw, hi_hw = min(h for _, h in hw) * 100, max(h for _, h in hw) * 100
+    prereg_phrase = (f"{lo_hw:.1f}-{hi_hw:.1f} points at a true difference of zero "
+                     f"(range across baseline over-refusal rates of 10%, 20% and 35%; "
+                     f"n=60 benign prompts, 3 seeds)")
+    W("**PRE-REGISTRATION-FACING FIGURE (quote this exact range in Methods and in")
+    W(f"`preregistration.md`):** the bootstrap 95% half-width is **{prereg_phrase}**.")
+    W("")
+    W("> This figure is emitted by `scripts/power_analysis.py`, not transcribed. An earlier")
+    W("> hand-copied value of \"4.6-6.6 points\" reached `preregistration.md` and")
+    W("> `pending_evalharness.md`; it was never produced by this script and is **wrong**.")
+    W("> Corrected 2026-08-01 — see the amendment note in `preregistration.md`. The true")
+    W("> figure is WORSE than the one quoted, which strengthens rather than weakens the")
+    W("> conclusion that over-refusal must be reported descriptively.")
+    W("")
     W("So the old rule — test the CI **upper bound** against 5 points — was unmeetable: the")
     W("upper bound exceeds 5 even when the true difference is exactly zero. Applying the")
     W("tolerance to the point estimate and reporting the interval beside it is the correction.")
@@ -231,8 +250,30 @@ def main():
 
     dest = REPO / "notebook" / "power_analysis.md"
     dest.write_text("\n".join(out), encoding="utf-8")
-    print("\n".join(out[:0]))
+
+    # Machine-readable sidecar. Anything quoting a power figure should read THIS, not prose.
+    side = {
+        "generated_by": "scripts/power_analysis.py",
+        "date": "2026-08-01",
+        "n_sim": N_SIM, "n_perm": N_PERM, "alpha": ALPHA,
+        "over_refusal_bootstrap_half_width_pts_at_true_zero": {
+            f"{int(p0*100)}%": round(h * 100, 2) for p0, h in hw},
+        "over_refusal_half_width_range_pts": [round(lo_hw, 1), round(hi_hw, 1)],
+        "prereg_phrase": prereg_phrase,
+        "power_at_thresholds": {k: round(v, 3) for k, v in pw.items()},
+        "judge_recall_used": 0.55,
+        "correction_note": ("An earlier hand-copied half-width range of 4.6-6.6 points "
+                            "reached preregistration.md and pending_evalharness.md. It was "
+                            "never produced by this script and is wrong; the computed range "
+                            f"is {round(lo_hw,1)}-{round(hi_hw,1)} points, i.e. WORSE. "
+                            "Corrected 2026-08-01."),
+    }
+    side_path = REPO / "notebook" / "power_analysis.json"
+    side_path.write_text(json.dumps(side, indent=2), encoding="utf-8")
+
     print(f"[written] {dest}")
+    print(f"[written] {side_path}")
+    print(f"[PREREG FIGURE] over-refusal bootstrap half-width: {prereg_phrase}")
     print(json.dumps({k: round(v, 3) for k, v in pw.items()}, indent=1))
 
 
