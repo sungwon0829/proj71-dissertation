@@ -1704,3 +1704,107 @@ weaker than it sounds is worse than no control.
 
 **The GPU-backed end-to-end re-score.** The card is now on B2 v3; I am continuing to yield.
 It stays the one item unconfirmed by execution and must run before any real arm is scored.
+
+---
+---
+
+# PENDING (part 10) — eval harness, 2026-08-01 — a number I got wrong, and the seed enumeration
+
+## 1. The power-number contradiction — my error, and it is the worse of the two
+
+**The 4.6–6.6 figure is wrong. The correct value is 5.3–8.5 points.**
+
+They are not answering different questions; there is no reconciliation to find. Re-running the
+seeded simulation reproduces **5.32 / 7.11 / 8.46 points** at baseline over-refusal rates of
+10% / 20% / 35% — exactly what `power_analysis.md` §4 already said the first time it was
+generated. **4.6–6.6 was never produced by any tool.** I wrote it by hand into
+`pending_evalharness.md` part 8 without reading it off the script that computed it, and from
+there it was picked up in good faith into `preregistration.md` Revisions 6/7 and
+`lab_notebook.md`.
+
+That is precisely the class of error I have spent this whole track auditing out of other
+people's work — quoting a number that was not read off the artefact that produced it — and it
+landed in the commitment document, which is the worst possible place for it.
+
+**The true figure is worse than the one quoted, and every conclusion stands and is
+strengthened.** A wider interval relative to the 5-point tolerance makes the old
+CI-upper-bound rule even more clearly unmeetable and makes reporting over-refusal descriptively
+even more clearly correct. **No decision made under Revision 6 or 7 changes.**
+
+### What was done
+- `preregistration.md`: the wrong figure is **struck through, not deleted**, with a pointer to
+  a new dated **AMENDMENT 7a** that states what was wrong, who got it wrong, the corrected
+  value, its authoritative source, and that the conclusions are unchanged. The file is a
+  commitment device; an amendment to it has to be visible.
+- `pending_evalharness.md` (two places) and `lab_notebook.md` (one): annotated in place with a
+  `[CORRECTED 2026-08-01 …]` marker rather than edited, so the propagation path stays legible.
+- `stats.py`'s `design_limitation_for_methods` string corrected to 5.3–8.5.
+
+### So it cannot drift again
+`power_analysis.py` now **emits** the pre-registration-facing figure in the same units and
+wording the pre-registration uses, and writes a machine-readable sidecar
+`notebook/power_analysis.json`:
+
+```
+over_refusal_bootstrap_half_width_pts_at_true_zero: {"10%": 5.32, "20%": 7.11, "35%": 8.46}
+over_refusal_half_width_range_pts: [5.3, 8.5]
+prereg_phrase: "5.3-8.5 points at a true difference of zero (range across baseline
+                over-refusal rates of 10%, 20% and 35%; n=60 benign prompts, 3 seeds)"
+```
+
+**Methods must cite `power_analysis.json`, never a remembered number.** The generated document
+carries the same warning inline.
+
+## 2. Seeds enumerated — 1, 2, 3
+
+No reason to deviate; **1 / 2 / 3 accepted**, and it matches what is already running (B2 is on
+seed 1). Recorded in `preregistration.md` §6 and in `judges_pinned.lock.json` → `run_metadata`.
+
+| Arm | Seeds | Note |
+|---|---|---|
+| B0, B1 | 42 | single run, context only |
+| B2, T | **1, 2, 3** | `--seed N` to `train_dpo.py` |
+| B3 | **1, 2, 3** | **derived**, not trained: B3 seed N = `apply_b3_filter.py(B2 seed N)`, so it inherits B2's seed by construction |
+| T_ctrl | 1 | 1-seed weak control (Rev 5) |
+
+Evaluation decoding is greedy, so the generation seed does not affect output; the training seed
+is what distinguishes the arms.
+
+**One thing found while doing this, flagged rather than silently fixed.** `configs/dpo_b2.yaml`
+and `configs/dpo_t.yaml` both contain `seed: 42`, but the runs are launched with `--seed 1`,
+which overrides it. CLAUDE.md requires a run to be reproducible **from its config file alone** —
+reproducing from the config as it stands today would silently use seed 42 and produce a
+different model. `train-runner` should either set the config seed per run or drop the field so
+the CLI is the single source of truth. Recorded in both the pre-registration and the pin lock.
+
+## 3. The two gaps the paper-writer refused to write
+
+**The −15.4 / +7.1 / net +8.3 decomposition.** Correctly refused: it came from the smoke arm
+built on B0 responses, because no real B3 existed when it was produced. It carried no arm
+label, which is what made it unciteable. `deterministic_rule_arithmetic` now stamps
+`computed_on_arm`, `computed_on_seed`, `computed_on_generations_sha256` and `is_real_arm` into
+every summary, so the figure can never again circulate detached from the arm it describes. It
+will be emitted per real arm once B3 exists, and belongs in Results, not Methods.
+
+**`is_paper_number` cannot currently be true for anything.** Confirmed, and correct — I am not
+loosening it. The console now prints a `BLOCKED BY:` block naming every unmet gate, and for the
+two human-dependent ones it names the files:
+
+```
+- *** HUMAN INPUT REQUIRED *** over-refusal labels are missing.
+    needed: results/human_validation/over_refusal_labels_MERGED.json
+    produce the worksheet with: python Scripts/dump_over_refusal_for_labelling.py --merge ...
+NOTE: the attenuation correction in stats.py additionally requires HUMAN judge-recall at
+    results/human_validation/asr_judge_recall_human.json
+    derived from results/human_validation/human_asr_worksheet.txt (already generated,
+    awaiting the owner's labels).
+Human labelling is therefore on the critical path for the paper, not the remaining training.
+```
+
+Both worksheets are built and waiting. **The owner's two labelling tasks — 60 attack items for
+judge recall, 120 benign items for over-refusal — are what unblock the paper.**
+
+## 4. Outstanding
+
+The GPU-backed end-to-end re-score. The card is on B2 v3 (63 GB at last check); still yielding.
+It remains the one item unconfirmed by execution and must run before any real arm is scored.

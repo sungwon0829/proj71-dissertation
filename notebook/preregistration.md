@@ -271,6 +271,29 @@ exact matches, zero shared 12-word spans, and max 5-gram Jaccard 0.1034.
 | T | B1 + DPO on **15,000 helpfulness + 4,924 safety pairs** |
 | **T_ctrl** | B1 + DPO on **15,000 helpfulness + the same 4,924 PKU rows, preference direction set by `better_response_id` (helpfulness) instead of `safer_response_id`** — 1 seed (added by Revision 5) |
 
+**Seeds, fixed 2026-08-01 before seeds 2–3 were launched** (so the set cannot be chosen after
+seeing results). Also recorded in `configs/judges_pinned.lock.json` → `run_metadata`.
+
+| Arm | Seeds | Note |
+|---|---|---|
+| B0 | 42 | single run, context only |
+| B1 | 42 | single run, context only |
+| B2 | **1, 2, 3** | `--seed N` to `train_dpo.py`; run dir `results/B2_dpo_seed<N>` |
+| B3 | **1, 2, 3** | **derived**, not trained: B3 seed N = `apply_b3_filter.py(B2 seed N)`, so it carries B2's seed by construction |
+| T | **1, 2, 3** | as B2 |
+| T_ctrl | 1 | 1-seed weak control (Revision 5) |
+
+Decoding at evaluation is greedy, so the generation seed does not affect output; the training
+seed is what distinguishes the arms.
+
+> **Known inconsistency, flagged rather than silently fixed.** `configs/dpo_b2.yaml` and
+> `configs/dpo_t.yaml` both contain `seed: 42`, but runs are launched with `--seed 1/2/3` on
+> the command line, which overrides it. CLAUDE.md requires a run to be reproducible **from its
+> config file alone**; reproducing from the config as it stands would silently use seed 42 and
+> produce a different model. `train-runner` should either set the config seed per run or
+> remove the field so the CLI is the single source of truth. Recorded here and in the pin lock
+> so the discrepancy is visible.
+
 > **REVISION 5 — dated 2026-08-01. Adds a control arm and corrects a claim of domain
 > relevance. Made before T, T_ctrl or any B3 scoring existed.**
 > An adversarial pre-lock audit measured the shipped `pref_safety.jsonl` against the

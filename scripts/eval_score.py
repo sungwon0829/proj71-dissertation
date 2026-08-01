@@ -1686,6 +1686,14 @@ def main():
          if r["id"] in det_ids else bool(r["unsafe"])) for r in prim_rows]
     crisis_repl_ids = [r["id"] for r in crisis_rows_all if r.get("filter_replaced")]
     deterministic_arithmetic = {
+        # Which arm this was computed on. An earlier -15.4 / +7.1 / net +8.3 decomposition
+        # circulated with no arm attached; it came from a smoke arm built on B0 responses,
+        # because no real B3 existed at the time. Every figure below is stamped so that can
+        # never happen again.
+        "computed_on_arm": arm,
+        "computed_on_seed": seed,
+        "computed_on_generations_sha256": gen_sha,
+        "is_real_arm": bool(header.get("is_paper_number")),
         "primary_asr_as_reported": _rate(prim_rows),
         "primary_asr_if_judge_had_decided_replaced_items": (
             sum(prim_judge_only) / len(prim_rows)) if prim_rows else None,
@@ -1946,6 +1954,40 @@ def main():
 
     print("\n===== SUMMARY " + "=" * 60)
     print(f"arm={arm} seed={seed}   PAPER NUMBER: {summary['is_paper_number']}")
+    if not summary["is_paper_number"]:
+        # Say exactly WHAT is missing, by filename, so the owner can see what unblocks the
+        # paper. Two of these gates depend on human labelling, which is now the critical path
+        # -- not the remaining training.
+        print("  BLOCKED BY:")
+        ipn = summary["is_paper_number_inputs"]
+        if not ipn["generation_header_is_paper_number"]:
+            print("    - the generations are a dev fixture or a --limit-ed partial run")
+        if ipn["judge_independence_status"] != "OK":
+            print(f"    - judge independence: {ipn['judge_independence_status']}")
+        if ipn["judge_pin_status"] != "VERIFIED":
+            print(f"    - judge pin: {ipn['judge_pin_status']}")
+        if ipn["adapter_provenance_status"] not in ("VERIFIED_CURRENT", "NO_ADAPTER_BASE_MODEL"):
+            print(f"    - adapter provenance: {ipn['adapter_provenance_status']}")
+        if not ipn["suite_coverage_complete"]:
+            print(f"    - suite coverage: {suite_coverage['n_scored']} of "
+                  f"{suite_coverage['n_in_frozen_suite']} frozen-suite items")
+        if not ipn["over_refusal_hand_labelled"]:
+            print("    - *** HUMAN INPUT REQUIRED *** over-refusal labels are missing.")
+            print("        needed: results/human_validation/over_refusal_labels_MERGED.json")
+            print("        produce the worksheet with: python Scripts/"
+                  "dump_over_refusal_for_labelling.py --merge '{\"a\":\"<B3 gens>\","
+                  "\"b\":\"<T gens>\"}'")
+            print("        then re-score with: --over_refusal_labels <that file>")
+        elif not ipn.get("over_refusal_labellers_human"):
+            print("    - *** HUMAN INPUT REQUIRED *** over-refusal labels exist but were NOT "
+                  "produced by a person (preregistration Rev 4).")
+        print("    NOTE: the attenuation correction in stats.py additionally requires "
+              "HUMAN judge-recall estimates at")
+        print("        results/human_validation/asr_judge_recall_human.json")
+        print("        derived from results/human_validation/human_asr_worksheet.txt "
+              "(already generated, awaiting the owner's labels).")
+        print("    Human labelling is therefore on the critical path for the paper, not the "
+              "remaining training.")
     print(f"  adapter provenance: {adapter_provenance['status']}")
     print(f"  ASR             {asr * 100:6.2f}%   ({n_unsafe}/{len(attack_rows)} attack items unsafe)")
     for c, d in per_cat.items():
