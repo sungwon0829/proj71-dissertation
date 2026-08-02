@@ -310,3 +310,87 @@ against generations from a model that does not exist in Table 1.
 Caught during the P-I rebuild, before any label was entered, so **no labelling work was
 lost**. The rebuilt worksheet points at the current pin-verified b0/b1 generation files and
 `verify_source_header()` now hash-checks the source at runtime so this cannot recur silently.
+
+---
+
+## Amendment 15 — Pinned artefacts are made byte-stable across platforms
+
+**Dated 2026-08-03.** Authorises and records a one-time normalisation of the pinned
+artefacts' line endings. **No judge, model, revision, prompt text, threshold, decision rule
+or pre-registered quantity changes.** The parsed content is proven identical; only the bytes
+encoding it change, and only once.
+
+### The defect
+
+`verify_judge_pin()` hashes pinned files with `sha256_file()`, which reads **raw bytes**.
+With `core.autocrlf=true` and no `.gitattributes`, git rewrites line endings on checkout, so
+one logical file hashes differently on Windows and Linux.
+
+Amendment 14b recorded this as "the pin fails on Linux". On investigation it was worse. All
+four pinned artefacts were **LF in the git index**, but only the lock had ever been through a
+checkout — so in the working tree the lock was CRLF (matching its recorded hash) while the
+three prompt files were LF (matching theirs). Consequently:
+
+| fresh clone | lock | the three prompts | result |
+|---|---|---|---|
+| Linux (`autocrlf=false`) | LF → hash ≠ recorded | LF → hashes match | **PIN BROKEN** |
+| Windows (`autocrlf=true`) | CRLF → hash matches | CRLF → hashes ≠ recorded | **PIN BROKEN** |
+
+**The pin verified on this machine only by accident of how the files happened to be
+written.** It would have failed for any reviewer on any platform. A pin that cannot be
+checked by the person it exists to convince is decoration.
+
+### The fix
+
+1. `.gitattributes` marks every pinned artefact `-text`, disabling EOL conversion on all
+   platforms, so working-tree bytes always equal committed bytes.
+2. Those files are normalised **to LF, once**.
+3. The one recorded hash that changed is updated.
+
+| file | old SHA-256 | new SHA-256 | |
+|---|---|---|---|
+| `configs/judges_pinned.lock.json` | `89783c75…0098f8d7` | `444aa1b6…87e3530` | **changed** |
+| `configs/behavioural_judge_prompt.txt` | `da157951…7338c00b` | `da157951…7338c00b` | unchanged |
+| `configs/crisis_judge_prompt.txt` | `b4bcabd9…48605936` | `b4bcabd9…48605936` | unchanged |
+| `configs/refusal_judge_prompt.txt` | `f158ccd2…5d3b2c8d` | `f158ccd2…5d3b2c8d` | unchanged |
+
+Full values: lock old
+`89783c75c235652ff0d2f333bdbb82421430b0f0263b189b804f75f00098f8d7`, lock new
+`444aa1b6022f4fec0032a7f56e160a23f3b99c280ead4242c687abd0787e3530`. The three prompt files
+were already LF and are **byte-identical** before and after; only `judges.yaml`'s recorded
+`pin_lock_sha256` was edited, and only that one field.
+
+### Proof that content did not change
+
+- `json.loads(lock_before) == json.loads(lock_after)` → **True**, asserted in the migration
+  and aborting on mismatch.
+- The three prompt files hash identically before and after, so their text is unchanged by
+  construction, not by inspection.
+- `verify_judge_pin()` re-run against the real `configs/judges.yaml`: **`status: VERIFIED`,
+  `pin_status: PINNED`, `pin_date: 2026-08-01`.** The pin date is deliberately unchanged —
+  this is not a re-pin. The instrument pinned on 1 August is the instrument in force.
+- `git check-attr text` reports `unset` for all four, and index bytes now equal working-tree
+  bytes for all four, which is exactly what a fresh clone receives.
+
+### Why this is not "editing a pinned artefact"
+
+Amendment 14a established that a pinned artefact is never edited, not even to correct it.
+This does not breach that rule and it is worth being explicit about why: the rule protects
+the **semantic content** of the pin, and that content is unchanged here — proven, not
+asserted. What changed is an encoding artefact of the host filesystem that was making the
+pin unverifiable for everyone else. Amendment 14b deliberately deferred this decision rather
+than taking it unilaterally while the pin was the subject of an incident; it is taken now, as
+a single atomic commit, with the before/after hashes recorded above.
+
+*Decided blind to arm-comparison results.* No arm has been scored; B3 has never been
+generated; T seed 1 has no evaluation output.
+
+### Also covered, inertly
+
+`.gitattributes` declares the same rule for `data/redteam/*.jsonl` and `*.md`. The frozen
+suite is byte-hashed the same way (`suite_sha256`, enforced in `eval_generate.py`,
+`eval_score.py`, `stats.py` and `dump_human_asr_worksheet.py`) and has the identical defect
+in principle, but `data/` is gitignored so the rule is inert today. It is declared so the
+suite cannot acquire the defect if it is ever committed in a reproducibility package.
+**Separately outstanding:** the frozen suite exists in exactly one place, on one disk, and is
+in no repository.

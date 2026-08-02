@@ -1,0 +1,34 @@
+# Project 71 — line-ending policy for PINNED artefacts.
+#
+# WHY THIS FILE EXISTS. `verify_judge_pin()` hashes pinned files with `sha256_file()`,
+# which reads RAW BYTES. With `core.autocrlf=true` (this machine) git rewrites line
+# endings on checkout, so the same logical file hashes differently on Windows and Linux
+# and the pin fails on a repository that is in fact correct.
+#
+# It was worse than a Linux-only problem. Before this file existed, the four pinned
+# artefacts were all LF in the git index, but only the lock had ever been through a
+# checkout — so in the working tree the lock was CRLF (matching its recorded hash) while
+# the three prompts were LF (matching theirs). A fresh clone would have converted ALL
+# FOUR, breaking the lock hash on Linux and all three prompt hashes on Windows. The pin
+# verified here only by accident of how the files happened to be written.
+#
+# `-text` disables EOL conversion entirely: git stores and checks out these bytes
+# verbatim on every platform, so working-tree bytes always equal committed bytes and the
+# recorded SHA-256 is the same everywhere. Normalised to LF once, under
+# pre-registration Amendment 15, with the parsed JSON proven unchanged.
+#
+# DO NOT remove `-text` from any line below, and do not add a pinned artefact without
+# also adding it here. A pinned file whose bytes are platform-dependent is not pinned.
+
+configs/judges_pinned.lock.json    -text
+configs/behavioural_judge_prompt.txt -text
+configs/crisis_judge_prompt.txt    -text
+configs/refusal_judge_prompt.txt   -text
+
+# The frozen red-team suite is byte-hashed the same way (`suite_sha256`, checked by
+# eval_generate/eval_score/stats/dump_human_asr_worksheet). It currently lives outside
+# git — `data/` is gitignored — so these rules are inert today. They are declared anyway
+# so that if the suite is ever committed, e.g. in a reproducibility package, it cannot
+# acquire the defect this file was created to remove.
+data/redteam/*.jsonl               -text
+data/redteam/*.md                  -text
