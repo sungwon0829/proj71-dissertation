@@ -180,12 +180,28 @@ corpus-wide scan found zero email addresses, so no email rule was written. Conte
 preserved: median answer length was 779 characters before and after, no answer lost more
 than 20\% of its length, and no answer was emptied. Row counts were unchanged
 (910 / 1{,}395 / 2{,}305). Verification has two layers. A same-row hard gate re-runs each
-row's own name pattern against its own scrubbed answer and aborts the run on any match;
-it never fired on the shipped output. A corpus-wide sweep then checks every known
-therapist's name pattern against every answer, and returned exactly one hit --- the
-string ``Fred Rogers'' inside a \emph{different} therapist's answer, quoting the
-television presenter. That is a name collision with a public figure, not a contributor
-identity, and mangling it would violate the do-not-over-scrub requirement. ESConv was
+row's own name pattern against its own scrubbed answer and aborts the run on any match. A
+corpus-wide sweep then checks every known therapist's name pattern against every answer.
+
+\paragraph{The scrub is incomplete, and both verification layers missed it.}
+\TODO{Disposition pending: this paragraph states the measured facts; whether B1 is
+retrained on corrected data, or the residual is reported as a limitation, is not yet
+decided. Rewrite once decided --- do not leave both options open in the submitted text.}
+Both name patterns are anchored with \verb|\b| word boundaries. Where a sign-off is
+\emph{fused} to the preceding token with no separating whitespace, \verb|\b| cannot match,
+so neither the scrub, nor the same-row hard gate, nor the corpus sweep --- all three of
+which share the pattern --- can fire. An unanchored re-sweep of the shipped
+\texttt{sft\_train.jsonl} finds \textbf{two} contributor sign-offs surviving in the
+training data, both fused to the preceding character (one to the closing word of the
+answer, one to the end of a URL). Both are answering therapists, i.e.\ exactly the
+identity class the scrub exists to remove. A third hit is a cited author named inside
+another therapist's answer while quoting his book; that is the same public-figure
+collision class as the ``Fred Rogers'' hit reported above, not a contributor identity, and
+the earlier claim that the sweep returned \emph{exactly one} such hit is therefore also
+wrong --- it returns two. The 2 residuals are 2 of 2{,}305 rows. They are present in the
+data that trained B1, and therefore inherited by every downstream arm. We have found no
+occurrence of either name in any generation from the retrained checkpoint or any
+preference-optimised arm. ESConv was
 confirmed unaffected by direct schema inspection: it has no author, credential or
 contact fields at all. Two independent runs produced byte-identical outputs.
 
@@ -681,9 +697,17 @@ script refuses to write over an existing file and versions instead.
 Qwen2.5-7B-Instruct ships a generation configuration that silently applies sampling with
 \texttt{repetition\_penalty=1.05}. We overwrite the generation configuration explicitly
 and record the effective values. We set \texttt{repetition\_penalty} to \textbf{1.05},
-the model's own shipped value, after measuring a decoding pathology: at 1.0 the SFT
-checkpoint degenerates into sentence-level loops on 44 of 300 suite items (14.7\%),
-against 1 of 300 for the base model. At 1.05, degeneration falls to 3.0\% of items by a
+the model's own shipped value, after measuring a decoding pathology.
+\TODO{The rp=1.0 figure previously stated here (44/300, 14.7\%) is withdrawn on two
+independent grounds and must be recomputed before this sentence is restored. First, it was
+measured on B1 v1 --- the checkpoint voided for the contributor-identity leak --- which
+appears in no arm of this paper, and the appendix's own rule forbids reporting a number
+whose adapter is unnamed or void. Second, it used an ad-hoc $\geq 5$-repeat detector,
+whereas the 3.0\%/6.0\% figures below come from the canonical $\geq 3$-repeat detector in
+\texttt{analyze\_degeneracy.py}; quoting them in one sentence compares two checkpoints
+under two incommensurable criteria. Recompute at rp=1.0 on B1 v2 with the canonical
+detector, or delete the comparison.}
+At 1.05, degeneration falls to 3.0\% of items by a
 strict exact-sentence-repeat criterion and 6.0\% by a looser $n$-gram criterion,
 concentrated in \texttt{prefilling} (6.7--15\%) and \texttt{persona} and near zero in
 \texttt{crisis\_adjacent}. It is reduced, not eliminated, and it reproduces on the clean
