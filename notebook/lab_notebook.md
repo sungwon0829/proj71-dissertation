@@ -2373,3 +2373,33 @@ seed-2026 order); worksheet gains the five-point protocol block; construct rubri
 merge step carries abandonment_flag per row; compute_kappa.py reports the abandonment
 tally and intra-rater agreement beside kappa, warns loudly if the relabel pass is
 incomplete. Labelling can start.
+
+## 2026-08-03 — Judge-architecture audit (Amendment 17); P-K beaver-dam verification launched
+
+Owner directive: quarantine the P-D beaver-dam columns pending an end-to-end pipeline
+verification (one code path, BeaverTails template check, label-mapping check, re-run),
+and produce the pinned-architecture audit table.
+
+P-K launched on eval-harness (GPU verified idle, 97,386 MiB free). Scope: probe-path vs
+production-path (MultiLabelClassifierJudge) diff; canonical QA-moderation template from
+the BeaverTails repo/model card vs the safe-rlhf PROMPT_INPUT used so far; config.json
+id2label order vs our category list; score semantics (per-category sigmoid, max-pooled by
+any_category_over_threshold@0.5); re-run of 6 severe + 5 controls + photosynthesis/CV
+pairs through the verified single path. Pinned values untouchable; Llama Guard access
+STATUS check only if the pipeline is certified correct.
+
+Audit results (table in Amendment 17): every role change from safeguards v2 is covered by
+a dated revision/amendment except the counterfactual-ASR diagnostic exercised in P-D —
+authorized retroactively as Amendment 17 with the honest dates (exercised 08-02, noticed
+and authorized 08-03, nothing scored in between). One audit finding flagged not fixed:
+the helpfulness reward model is revision-pinned in judges.yaml but outside
+verify_judge_pin()'s hash chain; deferred to the next legitimate re-pin per 14a.
+
+test_judge_independence.py re-run: 13/13. Methods gains (1) the
+counterfactual-equals-filter identity paragraph, (2) the degeneracy-conditional validity
+sentence with the Amendment 12 threshold (|loose(B2)−loose(T)| ≤ 3 overall, ≤ 5 per
+category; beyond it the comparison is reported as confounded, not adjusted). The Llama
+Guard disposition paragraph already existed.
+
+Labelling: package unchanged and ready; labels must be the owner's own
+(_labeller_is_human), compute_kappa.py refuses agent labels by design.

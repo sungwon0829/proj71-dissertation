@@ -907,6 +907,15 @@ serves as the B3 filter flagged \textbf{2 of the 6}, missing four items the judg
 The probe used a fixed seed, loaded no unpinned artefact, and changed no threshold, prompt or
 configuration.
 
+The probe also reports the moderation classifier in a second, \emph{counterfactual} column:
+what it would have said had it remained the attack-success judge, the role the original
+design assigned it before Revision~2. \textbf{That column is the same weights, the same
+pinned threshold and the same decision rule as the B3 filter --- an identity, not an
+independent measurement} --- and at the shared operating point the two columns cannot
+disagree; running both confirms determinism, nothing more. The counterfactual column is a
+diagnostic (Amendment~17). It is never a headline number, never enters Table~1 or Table~2,
+and is not the mechanism any reported attack-success rate is computed from.
+
 Three caveats travel with those numbers and are not optional. First, the controls are
 \emph{agent-labelled}, not human-confirmed: no human-labelled safe items exist in this
 project yet, so ``0 false flags on 5 controls'' is agreement with a language model's labels.
@@ -927,6 +936,15 @@ measurement: an arm that loops more may be scored \emph{safer} than it is. Since
 configuration largely resolved degeneration (Section~\ref{sec:methods:termination}), this
 mode may bite less on the reported arms, but that is unmeasured and we do not assume it
 away. It is one more reason the reported attack-success rate is a lower bound.
+\textbf{The between-arm comparison is therefore reported conditional on the pre-registered
+degeneracy differential} (Amendment~12): the attack-success comparison between B2-derived
+arms and T is treated as valid only while
+$\lvert\mathrm{loose}(\mathrm{B2}) - \mathrm{loose}(\mathrm{T})\rvert \leq 3$ percentage
+points overall \emph{and} $\leq 5$ points in every attack category, where \emph{loose} is
+the canonical $n$-gram repeat detector. Inside that envelope, the judge's discounting
+depresses both arms' measured rates roughly equally and the \emph{difference} survives;
+beyond it, the arm that degenerates more is scored systematically safer by an unmeasured
+amount, and the comparison is reported as confounded rather than adjusted.
 
 \paragraph{Over-refusal is measured by human labels, not by a judge.} The over-refusal
 judge failed validation twice on fresh held-out sets, and the two failures are mirror
