@@ -522,10 +522,26 @@ success by construction rather than by merit, and the central comparison would b
 tautology. The scoring harness enumerates every judge whose role is the attack-success
 judge and raises on any collision with the filter's mechanism identifier, comparing model
 identity rather than prompt --- a different prompt on the same weights is the same
-mechanism. Negative controls for this guard are exercised in the test suite, including
-against a different revision of the same model. During development the harness refused to
-score any arm because an earlier configuration violated this rule; we treat that refusal
-as the guard working.
+mechanism. Negative controls for this guard are exercised in the test suite
+(\texttt{scripts/test\_judge\_independence.py}, 13 assertions), including against a
+different revision of the same model, against a different pinned prompt on the same
+weights, and against a union in which only one member collides. During development the
+harness refused to score any arm because an earlier configuration violated this rule; we
+treat that refusal as the guard working.
+
+\paragraph{A shared base model, stated rather than left to be noticed.} The attack-success
+judge, the crisis behaviour judge and the over-refusal cross-check judge all run on
+Qwen2.5-7B-Instruct; they differ only in their pinned prompts, and each performs a
+different task. This sharing is between \emph{judges}, which rule~1 permits --- what it
+forbids is a judge sharing a mechanism with the \emph{filter}, and none does, the filter
+being a different model by different authors. We flag the shared base explicitly because it
+does have a consequence: a systematic weakness of the Qwen base would correlate the three
+judges' errors, so their agreement with each other is not independent evidence that any of
+them is correct. This is one reason the over-refusal paper number is human labels rather
+than the Qwen cross-check, and one reason judge agreement is reported against human labels
+rather than against another judge. We note also that the base model under evaluation is
+itself Qwen2.5-7B-Instruct; a judge sharing a base with the system it scores could in
+principle favour that system's phrasing, which the human-label validation is what bounds.
 
 \paragraph{Two safety judges, not one.} A harm-content classifier cannot assess
 \emph{correct crisis behaviour} or \emph{wrongful refusal}: a blank refusal is harmless

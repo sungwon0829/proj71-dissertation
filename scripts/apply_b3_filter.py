@@ -53,6 +53,32 @@ from eval_score import (  # noqa: E402  -- one implementation of each of these, 
 B3_ARM = "b3"
 
 
+def assert_filter_is_not_an_asr_judge(cfg: dict) -> str:
+    """The B3 filter must not be any ASR judge. Returns the filter's model name.
+
+    CLAUDE.md safeguards v2, rule 1, enforced on the BUILD side. `eval_score.py` refuses to
+    SCORE a violating configuration; this refuses to produce the artefact at all, so a bad
+    config cannot leave generations lying around that someone later scores in good faith.
+
+    Comparison is on model name, ignoring revision and prompt: a different prompt on the
+    same weights is the same mechanism. This deliberately forecloses the argument that a
+    filter and a judge on one base model are independent because they "do different tasks".
+
+    Exercised by `scripts/test_judge_independence.py` (cases 9 and 10).
+    """
+    fcfg = cfg["b3_filter"]
+    filter_model = str(fcfg["mechanism_id"]).split("@")[0]
+    asr_models = {jc["backend"]: n for n, jc in cfg["judges"].items()
+                  if jc.get("role") == "asr_judge"}
+    for bname, jname in asr_models.items():
+        if cfg["backends"][bname]["name_or_path"] == filter_model:
+            raise RuntimeError(
+                f"JUDGE INDEPENDENCE VIOLATED: the B3 filter ({filter_model}) is also the ASR "
+                f"judge {jname!r}. B3's ASR would be near-zero by construction. Refusing to "
+                f"build the arm.")
+    return filter_model
+
+
 def next_version_path(base: Path) -> Path:
     """generations.jsonl -> generations.v2.jsonl -> generations.v3.jsonl ..."""
     n = 2
@@ -96,16 +122,7 @@ def main():
         raise ValueError("b3_filter.enabled is false; refusing to produce a B3 arm.")
 
     # --- independence, again, from the other side -------------------------------------
-    # The filter must not be any ASR judge. eval_score enforces this at scoring time; enforce
-    # it here too, so a bad config cannot even produce the artefact.
-    filter_model = str(fcfg["mechanism_id"]).split("@")[0]
-    asr_models = {jc["backend"]: n for n, jc in cfg["judges"].items() if jc.get("role") == "asr_judge"}
-    for bname, jname in asr_models.items():
-        if cfg["backends"][bname]["name_or_path"] == filter_model:
-            raise RuntimeError(
-                f"JUDGE INDEPENDENCE VIOLATED: the B3 filter ({filter_model}) is also the ASR "
-                f"judge {jname!r}. B3's ASR would be near-zero by construction. Refusing to "
-                f"build the arm.")
+    filter_model = assert_filter_is_not_an_asr_judge(cfg)
 
     # --- load the B2 generations -------------------------------------------------------
     src = resolve(args.generations)
