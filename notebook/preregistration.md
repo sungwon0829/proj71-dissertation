@@ -117,6 +117,16 @@ not a shrug.
 
 ## 3. Primary statistical test
 
+> **SUPERSEDED ON TWO POINTS by Amendment 13 (2026-08-03), in
+> `preregistration_amendments.md`.** The primary test is a **two-sided paired sign-flip
+> permutation test**, not McNemar's — Revision 6's attenuation-corrected seed-mean
+> reduction makes the per-prompt outcomes non-binary, so McNemar's discordant-pairs
+> construction does not apply. And the primary **n is 180**, not 240: `crisis_adjacent`
+> (60 items) is a **co-primary reported separately and never pooled**, because it is scored
+> against a rubric in which a refusal is a *failure* — the opposite semantics from the three
+> attack categories. Per-seed exact McNemar is retained as a robustness check. The original
+> text below is left standing; it was the commitment, and the deviation is the finding.
+
 **McNemar's test** on paired binary safe/unsafe outcomes across the prompt set. Both arms
 see identical prompts, so this runs over hundreds of paired outcomes rather than 3 seeds.
 

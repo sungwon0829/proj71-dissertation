@@ -45,8 +45,11 @@ Gradient checkpointing& true (non-reentrant)    & true (non-reentrant) \\
 Max sequence length   & 4096 (zero truncation)  & 2048 (over-length pairs excluded) \\
 Packing               & false                   & --- \\
 Assistant-only loss   & true (verified)         & --- \\
-DPO $\beta$           & ---                     & 0.3 \\
-DPO loss              & ---                     & sigmoid, label smoothing 0.0 \\
+DPO $\beta$           & ---                     & 0.1 \\
+DPO loss              & ---                     & \texttt{loss\_type: [sigmoid, sft]} \\
+DPO loss weights      & ---                     & \texttt{loss\_weights: [1.0, 1.0]} \\
+\texttt{rpo\_alpha}   & ---                     & not set (anchor comes from \texttt{loss\_type}) \\
+Label smoothing       & ---                     & 0.0 \\
 Reference log-probs   & ---                     & precomputed, batch 8 \\
 Optimiser steps       & 435                     & 1{,}246 \\
 \bottomrule
@@ -66,11 +69,37 @@ with no gradient checkpointing ran out of memory at step 136 of 435 after alloca
 88\,GB; halving the per-device batch, doubling gradient accumulation to hold the effective
 batch at 16, and enabling gradient checkpointing reduced peak memory to 19.3\,GB even
 under a worst-case length-sorted batch order.
-\TODO{final training loss, wall-clock and peak memory for B2, T and T\_ctrl at
-$\beta=0.3$, all seeds.}
-\TODO{the three training-seed values used for B2 and T, and the single seed used for
-T\_ctrl. Seed 1 was run first for every arm; the remaining two are being fixed. The seed
-also selects the sampled helpfulness pairs, so it must be reported, not just counted.}
+
+B2 seed 1 under the frozen preference configuration: 1{,}246 optimiser steps, wall-clock
+7{,}233\,s (2.01\,h), peak 35.58\,GB, combined training loss 1.163. The superseded
+sigmoid-only runs, listed only so that the training profile in
+Section~\ref{sec:methods:termination} is reproducible: B2 v1 (void, stale supervised base)
+1{,}246 steps, training loss 0.0706, 7{,}070\,s, 31.03\,GB; B2 v2 ($\beta=0.1$) training
+loss 0.0709, 7{,}296.9\,s, 31.03\,GB; B2 v3 ($\beta=0.3$) training loss 0.06. Reward
+margins rose from about 8.3 at $\beta=0.1$ to about 13.0 at $\beta=0.3$; this is the
+$\text{reward} = \beta \times \text{log-ratio}$ scaling and not worse over-optimisation,
+because the underlying log-ratio \emph{shrank} from about 83 to about 43. Comparing raw
+margins across different $\beta$ values is a unit error.
+\TODO{training loss, wall-clock and peak memory for T seed 1, T\_ctrl seed 1, and seeds 2
+and 3 of B2 and T. Source: each run's \texttt{train.log}. B2 v3's wall-clock and peak
+memory are also not recorded in the project notebook.}
+
+\paragraph{Seeds.} The seed enumeration was fixed on 2026-08-01, before seeds 2 and 3 were
+launched, and is recorded in the pinned judge lock so that the set cannot be chosen after
+seeing results: B2, B3 and T use seeds 1, 2 and 3; B0 and B1 use seed 42; T\_ctrl uses seed
+1. B3 seed $N$ is derived from B2 seed $N$ by the filter script and carries the same seed by
+construction; no training and no new seed is involved. Decoding is greedy, so no generation
+seed affects any output. As of drafting, only seed 1 has completed for B2 and T, and
+T\_ctrl has not been launched.
+
+\paragraph{Launch mechanism, recorded because it destroyed two runs.} Two T seed 1 attempts
+died at step 104 of 1{,}246, both within three seconds of exactly 60 minutes after launch
+(59:57.9 and 59:57.9), with every start-up gate passed, no surviving process and a clean
+device afterwards. The cause was a hard one-hour ceiling on the background-launch mechanism
+used, not a code or configuration fault: the B2 run that completed had been launched with a
+shell-level detach instead and survived 120.6 minutes. Any run expected to exceed roughly 55
+minutes is launched detached. The two killed directories are retained as the incident's
+provenance record and are never confused with the real T seed 1 output.
 
 \section{Data pipeline counts}
 \label{app:datacounts}
@@ -86,9 +115,21 @@ prompt: ESConv median 647, p95 1098, max 2{,}603; CounselChat (post-deduplicatio
 short-turn pattern.
 
 \paragraph{Helpfulness pairs.} 34{,}329 pairs $\rightarrow$ 33{,}667 after excluding 662
-safety-inverted pairs $\rightarrow$ 33{,}596 after excluding 77 over-length pairs (6
-overlapping). B2 samples 19{,}924; T and T\_ctrl sample the identical 15{,}000 under the
-same seed.
+safety-inverted pairs $\rightarrow$ 33{,}596 after excluding over-length pairs. 77 of the
+34{,}329 rows exceed the 2{,}048-token limit, of which 6 were already removed by the
+inversion filter, so the length filter removes a further \textbf{71} --- the figure recorded
+live in every run manifest as \texttt{n\_excluded\_helpful\_by\_max\_length}. B2 samples
+19{,}924; T and T\_ctrl sample the identical 15{,}000 under the same seed.
+
+\paragraph{Training-data hashes.} B2 seed 1 (frozen run):
+\texttt{sampled\_data\_sha256} $=$ \texttt{consumed\_data\_sha256} $=$
+\texttt{4ddb48309740eb5459c08740b54452311dafc995c9faa88cf8ae9477fa3bf705}, 19{,}924 of
+19{,}924 rows, 0 dropped by TRL. T seed 1:
+\texttt{3dc3e24d2d13131046a3983586fad6ec4d9fa4a382b4cb108140cd75143562f6}, 19{,}924 of
+19{,}924 rows, 0 dropped. The hash definition is written into every manifest and is
+restated in Section~\ref{sec:methods:provenance}.
+\TODO{training-data hashes for T\_ctrl seed 1 and for seeds 2 and 3 of B2 and T, from each
+run's \texttt{dpo\_data\_manifest.json}. Those runs do not yet exist.}
 
 \paragraph{Safety pairs.} 73{,}907 PKU-SafeRLHF training rows $\rightarrow$ 26{,}170 after
 the harm-category-or-keyword relevance filter (23{,}214 by category, 5{,}077 by keyword)

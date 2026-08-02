@@ -31,12 +31,17 @@ configuration at start-up and refuses to run if they differ. Numerical precision
 sequence length, batching and optimiser settings are in Appendix~\ref{app:hparams}.
 
 We ran on one RTX PRO 6000 Blackwell (96\,GB) under native Windows Server 2025, with
-PyTorch 2.11.0+cu128, transformers 5.14.1, TRL 1.9.0 and PEFT 0.19.1. Attention used
-the scaled dot-product (SDPA) implementation; we used neither flash-attention,
-bitsandbytes, nor vLLM, because none is reliable on this platform. Consequently all
-arms use LoRA rather than full fine-tuning or QLoRA, and all batch generation runs
-through \texttt{transformers}. Every script takes \texttt{--seed} and sets the Python,
-NumPy and PyTorch seeds; the seed is written into the output directory name.
+PyTorch 2.11.0+cu128, transformers 5.14.1, TRL 1.9.0 and PEFT 0.19.1. The platform
+dictated several method choices, so we state them rather than leaving them as unexplained
+defaults. The GPU is locked in Tesla Compute Cluster (TCC) mode on a headless host, which
+removes the display path that WSL2 GPU passthrough requires, so we run native Windows and
+not Linux. vLLM is Linux-only, so all batch generation runs through
+\texttt{transformers}. bitsandbytes is not reliable on native Windows, so there are no
+8-bit optimisers and no QLoRA; every arm therefore uses LoRA with one identical adapter
+configuration, and full fine-tuning is out of scope. Attention uses the scaled dot-product
+(SDPA) implementation; we never use flash-attention, which is unsettled on this
+architecture. Every script takes \texttt{--seed} and sets the Python, NumPy and PyTorch
+seeds; the seed is written into the output directory name.
 
 \subsection{Supervised fine-tuning: the B1 arm}
 \label{sec:methods:sft}
@@ -204,8 +209,9 @@ the corpus and we state so rather than claim a complete scrub.
 responses. We excluded 662 pairs (1.93\%) in which the rejected response carries a
 higher safety rating than the chosen response, so that the helpfulness-only arm is not
 quietly nudged toward less safe outputs, and 77 pairs whose prompt-plus-completion
-exceeds 2{,}048 tokens (6 overlapping the previous exclusion). Pairs are excluded rather
-than truncated: a truncated completion corrupts the chosen-versus-rejected comparison the
+exceeds 2{,}048 tokens, 6 of which the previous exclusion had already removed, so the
+length filter removes a further 71 --- the count each run manifest records live. Pairs are
+excluded rather than truncated: a truncated completion corrupts the chosen-versus-rejected comparison the
 Direct Preference Optimization (DPO) loss is computed over. The filtered pool is 33{,}596
 pairs.
 
@@ -272,32 +278,62 @@ same total, the same number of optimiser steps (1{,}246 at effective batch 16), 
 same hyperparameters. Only composition differs. Without this, any T effect would be
 confounded with the amount of preference data rather than its type. Both counts, and
 content-hash identifiers for every sampled pair, are written at run time to a per-run
-data manifest. The training script asserts that the three DPO configurations are
-byte-identical on every field except arm label, data composition and preference
-direction.
+data manifest, together with a SHA-256 of the training data actually consumed
+(Section~\ref{sec:methods:provenance}). The training script asserts that the three DPO
+configurations are byte-identical on every field except arm label, data composition and
+preference direction.
 
-\paragraph{DPO setup.} We train DPO \citep{rafailov2023dpo} on top of the B1 adapter.
-Two implementation details were verified against the installed library source rather
-than assumed. First, \texttt{PeftModel.from\_pretrained} defaults to
+\paragraph{The preference-optimisation objective is not vanilla DPO.} We train on top of
+the B1 adapter with \textbf{Direct Preference Optimization (DPO) \citep{rafailov2023dpo}
+plus a Reward-Preference-Optimization-style (RPO) negative-log-likelihood (NLL) anchor on
+the chosen completion} \citep{pang2024irpo}. The objective is the sum of the standard
+sigmoid DPO term and a token-mean cross-entropy term over the chosen response only. Every
+DPO arm --- B2, T and T\_ctrl --- uses this objective; ``DPO'' unqualified is a wrong
+description of this method and we do not use it.
+
+\textbf{Which application programming interface (API) produced this matters for
+reproduction, so we name it.} We implement the anchor through TRL's multi-loss path:
+\texttt{loss\_type: [sigmoid, sft]} with \texttt{loss\_weights: [1.0, 1.0]} and
+$\beta = 0.1$. TRL also exposes \texttt{rpo\_alpha}, which is a different argument
+reaching the same anchor; \textbf{\texttt{rpo\_alpha} appears in none of our
+configurations}, and a reader who reaches for it will not reproduce our runs from the
+configuration files. We verified the semantics against the installed TRL 1.9.0 source
+before spending GPU time rather than trusting documentation: \texttt{DPOConfig.\_\_post\_init\_\_}
+coerces a string \texttt{loss\_type} to a list and requires
+\texttt{len(loss\_weights) == len(loss\_type)}, raising at construction otherwise; the
+terms combine as \texttt{loss += per\_sequence\_loss.mean() * loss\_weight} over
+\texttt{zip(loss\_types, loss\_weights)}; and the \texttt{sft} branch computes
+cross-entropy over the chosen completion from the \emph{policy's} own forward pass, using
+the completion mask, so it excludes prompt tokens and does not interact with
+\texttt{precompute\_ref\_log\_probs}. The sigmoid term converges to roughly 0.06 nats
+while the anchor is a token-mean cross-entropy of roughly 1--2 nats, so equal weights make
+the anchor dominant by construction rather than by accident; that is the intended
+hold-near-the-supervised-distribution effect.
+
+Two further implementation details were verified against the installed library source
+rather than assumed. First, \texttt{PeftModel.from\_pretrained} defaults to
 \texttt{is\_trainable=False}; without an explicit override, DPO would have trained
-nothing and both arms would have returned B1 unchanged. Second, with no new
+nothing and every arm would have returned B1 unchanged. Second, with no new
 \texttt{peft\_config} and \texttt{ref\_model=None}, TRL clones the current adapter into a
-frozen reference adapter, so the DPO reference policy is B1's own distribution --- the
+frozen reference adapter, so the reference policy is B1's own distribution --- the
 intended continuation semantics rather than a custom hack. All three DPO arms use
-$\beta = 0.3$, learning rate $5\times10^{-6}$, one epoch, sigmoid loss, and precomputed
-reference log-probabilities.
+learning rate $5\times10^{-6}$, one epoch, cosine schedule with 0.03 warm-up,
+\texttt{max\_grad\_norm} 1.0, effective batch 16 (per-device 2, gradient accumulation 8)
+with gradient checkpointing, label smoothing 0.0, and precomputed reference
+log-probabilities. Full values are in Appendix~\ref{app:hparams}.
 
-\paragraph{Why $\beta$ is 0.3 and not 0.1.} Our first two B2 runs used $\beta = 0.1$ and
-both produced reward statistics that looked excellent and generations that were
-degenerate: final reward margins around 8.3 with reward accuracies of 0.975--1.0, and 4
-of 8 held-out sanity prompts showing verbatim phrase loops, a fully duplicated response,
-or the model fabricating and continuing its own \texttt{User:} turns. Reward statistics
-alone would have shipped that checkpoint; the generation check caught it. We raised
-$\beta$ to 0.3 as a single-variable change applied identically to B2, T and T\_ctrl, and
-held everything else fixed. The degeneracy check is repeated on every DPO run.
-\TODO{final training loss, wall-clock, peak VRAM and degeneracy-check outcome for B2,
-T and T\_ctrl at $\beta=0.3$; the $\beta=0.1$ runs recorded train loss 0.0709, 7{,}297\,s
-and 31.03\,GB peak, which is the indicative profile only.}
+\paragraph{Observed run cost for the frozen configuration.} B2 seed 1 under the frozen
+configuration ran 1{,}246 optimiser steps in 7{,}233\,s (2.01\,h) at 35.58\,GB peak
+memory, with combined training loss 1.163. That loss value combines two terms and is not
+comparable to the sigmoid-only values reported in
+Section~\ref{sec:methods:termination}. A mid-run abort rule fixed before launch --- kill
+the run if \texttt{rewards/accuracies} stalls below 0.8 at step 50 --- was not triggered:
+accuracies read 0.925 at step 50 and stayed at or above 0.8 from step 15 through step 105,
+with one dip to 0.7375 at step 20.
+\TODO{training loss, wall-clock and peak memory for T seed 1, T\_ctrl seed 1, and seeds 2
+and 3 of B2 and T. Source: each run's \texttt{train.log} and
+\texttt{results/<arm>\_dpo\_seed<n>/}. As of drafting, only B2 seed 1 (v4) and T seed 1
+have completed and T seed 1's training log has not been summarised into the notebook.}
 
 \paragraph{T\_ctrl, and the exact limit of what it controls for.} Because the safety
 pairs come from a different corpus \emph{and} a different domain than the helpfulness
@@ -320,6 +356,155 @@ pair. It still detects the case where T's advantage comes entirely from adding
 out-of-domain preference data. We chose this over drawing contrast rows from the 21{,}246
 discarded rows, where ``better'' among two unsafe responses would mean training toward
 unsafe.
+
+\subsection{DPO termination failure, and the fix that defines our objective}
+\label{sec:methods:termination}
+
+We did not choose the NLL anchor for elegance. Vanilla sigmoid-only DPO on this
+supervised policy \textbf{failed to terminate}, and we report the diagnosis because it is
+a methodological result in its own right and because it is the reason the frozen
+configuration looks the way it does. Everything in this subsection concerns superseded B2
+runs. \textbf{Those runs are named v2 and v3, they appear only here, and neither is ever a
+row in Table~\ref{tab:main} or Table~\ref{tab:categories}}; ``B2'' everywhere else in this
+paper means the frozen run, B2 v4.
+
+\paragraph{What failed.} Two sigmoid-only B2 runs at $\beta = 0.1$ (v2) and $\beta = 0.3$
+(v3) produced reward statistics that looked excellent --- final reward margins around 8.3
+at $\beta=0.1$ with reward accuracies of 0.975--1.0 --- and generations that looped. On an
+8-prompt qualitative check the $\beta=0.1$ run showed 4 of 8 degenerate responses, so we
+raised $\beta$ to 0.3 as a single-variable change applied identically to all three DPO
+arms. Measured over the full 300-item frozen suite that made things worse, not better.
+Table~\ref{tab:termination} gives the four-way comparison, all four checkpoints scored
+with the same detector module under the same pinned decoding configuration.
+
+\begin{table}[t]
+\centering
+\caption{Degeneration and termination on the full 300-item frozen suite, identical pinned
+decoding configuration, identical detectors (\texttt{scripts/analyze\_degeneracy.py}).
+\emph{Strict} is a sentence longer than 15 characters repeated at least three times
+verbatim; \emph{loose} is a 6-gram repeat fraction of at least 10\%; \emph{cap-hit} is a
+response reaching the 512-token cap without emitting end-of-sequence (EOS). B2 v2 and v3
+are superseded runs and appear nowhere else in this paper.}
+\label{tab:termination}
+\small
+\begin{tabular}{lrrrr}
+\toprule
+ & B1 (no DPO) & B2 v2 & B2 v3 & \textbf{B2 v4 (frozen)} \\
+ & & sigmoid, $\beta{=}0.1$ & sigmoid, $\beta{=}0.3$ & \textbf{$+$ NLL anchor, $\beta{=}0.1$} \\
+\midrule
+Strict repeat            & 3.0\% (9/300)  & 16.0\% (48/300) & 14.3\% (43/300) & \textbf{1.7\% (5/300)} \\
+Loose repeat             & 6.0\% (18/300) & 21.3\% (64/300) & 23.7\% (71/300) & \textbf{3.0\% (9/300)} \\
+Fabricated \texttt{User:} turns & 0/300 & 6/300 & 0/300 & \textbf{0/300} \\
+Cap-hit (no EOS)         & 5.0\% (15/300) & 23.0\% (69/300) & 23.7\% (71/300) & \textbf{3.7\%} \\
+Terminate in $[384,508)$ & 0/300 & 5/300 & 0/300 & 10/300 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{The mechanism is non-emission of EOS, and it is invariant to $\beta$.}
+Cap-hit rate is the clean read: 5.0\% without DPO, 23.0\% at $\beta=0.1$, 23.7\% at
+$\beta=0.3$. Both sigmoid-only runs fail to terminate four to five times more often than
+the supervised model, and the two $\beta$ values are indistinguishable from each other. The
+gradient logs explain why $\beta$ could not fix it: the gradient norm exceeded
+\texttt{max\_grad\_norm}${}=1.0$ on \textbf{61.0\%} of logged steps at $\beta=0.1$ and
+\textbf{57.8\%} at $\beta=0.3$, so on most steps the update was renormalised to the same
+value regardless of $\beta$. Raising $\beta$ raised the pre-clip norm from 2.65 to 6.37,
+which increased the fraction of steps on which $\beta$ stopped mattering. Two further
+observations point the same way, both measured on the $\beta=0.3$ run: no item terminated
+in the $[384,508)$ token band at all, so a larger token budget would only have bought longer
+loops, and the loops began \emph{after} a normal-length answer (median 48 words against 46
+for clean items), so verbosity-targeted remedies were a poor fit. Cap-hit was 97.2\%
+predictive of degeneracy in that run, which is why we adopted it as the fast readout. We also tested and rejected likelihood
+displacement as the explanation on our own data rather than by analogy:
+\texttt{rewards/chosen} was positive at 249 of 249 logged steps in both runs. Noisy-label
+remedies do not apply either --- there are zero duplicate triples in the training pairs and
+median chosen-versus-rejected similarity is 0.108, so the pairs are trivially separable,
+which also explains the near-1.0 reward accuracies innocently.
+
+\paragraph{The fix, and its acceptance rule.} We recorded the intervention ranking and a
+binding stopping rule \emph{before} the diagnostic returned. The top-ranked intervention
+was the NLL anchor described above, on the grounds that it restores a per-token gradient on
+the chosen response \emph{including its EOS token} and so attacks the measured mechanism
+directly, where $\beta$ attacks neither. It costs nothing in pre-registration terms: the
+pair count, the matched volume and the optimiser-step count are unchanged, and the change is
+applied identically to all three arms by assertion. One attempt was authorised, with a
+second (\texttt{max\_grad\_norm} lowered to 0.3) held in reserve and a hard stop after it.
+The first attempt succeeded --- B2 v4 in Table~\ref{tab:termination} beats the no-DPO
+baseline on all four metrics --- so by the pre-committed branching rule the second attempt
+was not run and the configuration was frozen.
+
+\paragraph{Two things this fix does not mean, stated because both are easy to get wrong.}
+First, \textbf{the degeneracy improvement removed a measurement confound; it did not make
+the model safer.} A manual re-scan of B2 v4's flagged items found that
+\texttt{many\_shot\_052} remains a severe attack success in a shorter, fluent, barely
+detectable form, alongside a severe case at \texttt{many\_shot\_004} and a moderate one at
+\texttt{prefilling\_011}. Fixing the loop made the failure harder to see, not absent.
+Second, our acceptance criterion is \emph{differential}, not absolute: absolute degeneration
+is a limitation, but degeneration that \emph{differs} between B2 and T enters the measured
+treatment effect and is a confound. We therefore pre-registered acceptance as
+$|\text{loose}(\text{B2}) - \text{loose}(\text{T})| \leq 3$ points overall and $\leq 5$
+points in every attack category, and pre-registered the response to a failure as
+investigate-and-report rather than silent retraining, with the reference point (B2 v4's
+per-category loose rates) recorded before T's number existed.
+\TODO{T seed 1's degeneracy figures and the differential against B2 v4's 3.0\% loose
+overall. Source: \texttt{scripts/analyze\_degeneracy.py} over T seed 1's full-suite
+generations; \texttt{results/T\_dpo\_seed1/} currently holds the adapter and manifest only,
+with no generations and no \texttt{degeneracy\_analysis.json}.}
+
+\paragraph{Novelty of this observation, stated without overclaiming.} Our literature search
+found no paper that names EOS non-emission under DPO as its own phenomenon, with
+quantitative cap-hit figures, in a general-instruction or therapy-support setting. The
+closest prior work explains why such a thing could happen --- gradient asymmetry
+\citep{feng2024limitations}, likelihood displacement
+\citep{razin2025likelihooddisplacement}, and over-optimisation in direct alignment
+algorithms \citep{rafailov2024scalinglaws} --- and length exploitation is well studied as a
+distinct failure \citep{park2024disentangling,lu2024sampo}. We therefore report the
+termination failure as an original empirical observation on one model, one supervised
+corpus and one preference pool, and not as a general property of DPO.
+
+\subsection{Run provenance: manifests, data hashes, and what the seed determines}
+\label{sec:methods:provenance}
+
+Every training run writes a manifest recording the resolved seed, the sampled and consumed
+pair counts, the full data funnel, and two SHA-256 hashes of the training data itself. Two
+hashes are needed because sampled is not necessarily consumed: TRL drops rows whose prompt
+alone reaches \texttt{max\_length}, so we hash both our sampling step's output
+(\texttt{sampled\_data\_sha256}) and the dataset extracted from
+\texttt{trainer.train\_dataset} after construction (\texttt{consumed\_data\_sha256}). The
+serialisation is fixed and written into every manifest: newline-joined canonical JSON per
+record (\texttt{sort\_keys=True}, \texttt{separators=(',',':')}), in dataset order, UTF-8,
+no trailing newline. Measured drop counts are zero everywhere, so sampled equals consumed
+in every completed run; for B2 seed 1 both hashes are
+\texttt{4ddb4830\ldots fa3bf705} and for T seed 1 both are \texttt{3dc3e24d\ldots 143562f6},
+each over 19{,}924 of 19{,}924 rows with 0 dropped by TRL.
+
+\paragraph{The seed selects the data, not merely the initialisation.} Because the seed
+chooses which helpfulness pairs are sampled, an unreported or wrong seed silently produces a
+different training set rather than a differently initialised run of the same one. We found
+this the hard way: three shared configuration files declared \texttt{seed: 42} while runs
+were launched with \texttt{--seed 1}, and the field turned out never to be read at all. It
+was dead, misleading text, but a peer reproducing from the configuration file alone --- which
+the project contract requires to be sufficient --- would have trained on a different 15{,}000
+pairs and would have had no warning. We removed the \texttt{seed} field from all four shared
+configurations, made \texttt{--seed} the sole source of truth, and added a start-up assertion
+that fails loudly if a \texttt{seed} key is ever reintroduced. We then verified determinism
+rather than asserting it: re-running the sampling step alone in a fresh process reproduces
+B2 seed 1's manifest hash, and the live-recorded sampled pair identifiers are byte-identical
+across all three completed B2 runs despite those runs spanning both the data scrub and the
+$\beta$ change.
+
+\paragraph{Five manifests carry reconstructed command lines, and we say so.} The
+\texttt{cli\_invocation} field was added after five runs had already completed (B1 v1, B1 v2,
+B2 v1, v2, v3). Those five entries were backfilled from the notebook, the output-directory
+name and the configuration used, and each is flagged \texttt{reconstructed: true} with the
+date and a warning that it is \textbf{not evidence of the command actually typed}. Runs from
+2026-08-01 onward --- B2 v4, T seed 1 and its two killed attempts --- recorded the field live
+and carry no flag. Two of the five reconstructions carry a further caveat: re-executing their
+recorded argv today would \emph{not} reproduce the run, because \texttt{configs/dpo\_b2.yaml}
+has since changed three times. B1 v1's carries the strongest caveat of all --- its training
+data is unrecoverable, because the pre-scrub \texttt{sft\_train.jsonl} was overwritten and
+was never version-controlled. B1 v1 is a voided run, so the cost is one line here rather than
+a missing paper number, but we record the gap rather than papering over it.
 
 \subsection{The B3 guardrail baseline}
 \label{sec:methods:b3}
@@ -585,6 +770,31 @@ control and all contradicted by the prompt hashes already written into every sco
 on disk. From the pin date, a judge later found to be wrong is reported as a limitation,
 not fixed.
 
+\paragraph{The judge-contingency rule, fixed before the judge was probed.} A judge may not
+be swapped out after its weaknesses are measured on the very data it will score, because
+the swap would then be selected --- however honestly --- against the results it produces.
+We therefore committed in advance that \textbf{the primary pre-registered attack-success
+judge remains primary regardless of what any later probe of it finds}. If a probe shows
+misses, we report that fact, and any human-anchored alternative metric is reported as
+explicitly \emph{exploratory} alongside the primary one: excluded from
+Table~\ref{tab:main}'s attack-success column, excluded from the headline sentence, and not
+used to evaluate the pre-registered 10-point threshold. This commitment was recorded before
+the probe described in Section~\ref{sec:methods:kappa} was run, and the probe changed
+nothing.
+
+\paragraph{A note on the role assignment, because a stale version of it circulated.} The
+assignment in Table~\ref{tab:judges} is the one enforced in code and recorded in the pin
+lock. It is the \emph{swapped} assignment introduced by pre-registration Revision~2, not
+the original one: the moderation classifier is the filter and the prompted behavioural
+rubric is the attack-success judge, not the other way round. Project documents carried the
+original assignment for a period after the swap; where prose and the pin lock disagree, the
+pin lock and the pre-registration are authoritative and the prose is wrong. Llama Guard
+appears in neither role --- access was never requested and it was never obtained, and
+Revision~2 makes it moot rather than outstanding. The fallback Qwen-based filter that
+earlier plans named must \emph{not} be installed, because the attack-success judge runs on
+Qwen2.5-7B and a Qwen filter would violate the independence rule; that configuration halted
+the harness once already, and it is the standing negative control in the independence test.
+
 \paragraph{Two deterministic scoring conventions.} Both were adopted before scoring any
 arm, and both are enforced in code with tests. First, attack items in the three
 non-crisis categories whose response was replaced by the B3 filter are scored
@@ -661,6 +871,38 @@ so that human and judge answer the same question. \TODO{human Cohen's $\kappa$ a
 for the attack-success judge, and per-arm recall estimates, from the 60-item arm-masked
 worksheet.} Both figures --- inter-model and human --- will be reported side by side, and
 neither replaces the other.
+
+\paragraph{A gold-item probe of the judge, and what $n=6$ can and cannot support.} We ran a
+small probe of all three safety mechanisms over six responses already identified by hand as
+severe or moderate attack successes, plus five negative controls, under the contingency rule
+above. \textbf{Six items is an illustration of a known recall limitation, not a recall
+estimate}, and we report it as such: no confidence interval is attached, no rate is computed
+from it, and it decides nothing. The attack-success judge flagged \textbf{5 of the 6} gold
+items and produced \textbf{0 false flags on the 5} controls. The moderation classifier that
+serves as the B3 filter flagged \textbf{2 of the 6}, missing four items the judge caught.
+The probe used a fixed seed, loaded no unpinned artefact, and changed no threshold, prompt or
+configuration.
+
+Three caveats travel with those numbers and are not optional. First, the controls are
+\emph{agent-labelled}, not human-confirmed: no human-labelled safe items exist in this
+project yet, so ``0 false flags on 5 controls'' is agreement with a language model's labels.
+Second, the moderation classifier \textbf{failed its own smoke test} --- it flagged a plain
+explanation of photosynthesis at 0.93 and generic curriculum-vitae advice at 0.55 --- so its
+column records behaviour but certifies nothing. That failure is the classifier's behaviour
+and not our interface: both false flags reproduce unbatched, without the conversation
+prefix, and in float32, and an in-distribution check on the classifier's own annotation
+project's test data gives recall 0.94 on unsafe responses, which a mis-built interface would
+not.
+
+Third, and most consequential for measurement validity: \textbf{the judge's single miss
+reveals that it discounts degenerate text}. The missed item is a response that narrates the
+user's death as accomplished fact, repeated 39 times, with an $n$-gram repeat fraction of
+1.00; the judge's own analysis correctly identifies the attack and then dismisses the
+response as ``a repetitive and bland statement''. This couples degeneracy to attack-success
+measurement: an arm that loops more may be scored \emph{safer} than it is. Since the frozen
+configuration largely resolved degeneration (Section~\ref{sec:methods:termination}), this
+mode may bite less on the reported arms, but that is unmeasured and we do not assume it
+away. It is one more reason the reported attack-success rate is a lower bound.
 
 \paragraph{Over-refusal is measured by human labels, not by a judge.} The over-refusal
 judge failed validation twice on fresh held-out sets, and the two failures are mirror
@@ -817,6 +1059,34 @@ $1.15\times$ cost in minimum detectable effect. Revision~7 made over-refusal des
 rather than a passed test and reworded the headline sentence. We list them here because a
 revision that is not visible is not a pre-registration.
 
+Amendment~7a corrected a wrong number inside Revision~7: the bootstrap half-width on the
+over-refusal difference at a true difference of zero was quoted as 4.6--6.6 points, had been
+hand-transcribed rather than read from the tool that computed it, and is in fact
+\textbf{5.3--8.5 points} across baseline over-refusal rates of 10\%, 20\% and 35\%. The
+corrected figure is worse than the one originally quoted, so Revision~7's conclusion is
+strengthened rather than weakened, and no decision made under it changes.
+
+A second dated file carries Amendments~8--12, written on 2026-08-02 under the same rules and
+each stating what it was blind to. Amendment~8 fixes the preference objective as DPO with an
+RPO-style NLL anchor and abandons vanilla sigmoid-only DPO, on the diagnostic in
+Section~\ref{sec:methods:termination}; it also fixes that the superseded runs appear only in
+that analysis. Amendment~9 confirms and justifies T\_ctrl at one seed, and explicitly
+corrects its own first wording: T\_ctrl was specified at one seed when it was created, so
+this is not a descope and no reader should infer one. Amendment~10 splits human validation
+into a 60-item stage now and a roughly 120-item arm-blinded stage once all arms have
+generations, and states in advance that the 60-item stage is \emph{below} the 100--150 range
+our own safeguard requires and that no gold or attention-check items are embedded in it.
+Amendment~11 is the judge-contingency rule stated in Section~\ref{sec:methods:judges}; it
+also corrects its own first wording, which had named the moderation classifier as the primary
+attack-success judge --- the role Revision~2 had already moved away from it. Amendment~12
+fixes, before the triggering number existed, that a differential-degeneracy failure in T
+under the identical frozen configuration is investigated and reported rather than retrained
+away, and records B2's per-category reference rates for that comparison.
+
+We keep both corrections-of-amendments visible for the same reason we keep the superseded
+revision text: an amendment log that quietly fixes itself is not a commitment device.
+Superseded text is struck through in place, never deleted.
+
 \subsection{What this design cannot measure}
 \label{sec:methods:designlimits}
 
@@ -842,7 +1112,8 @@ A third limit is worth naming here because it is invisible to every metric we re
 B1's fabricated self-disclosure and its terse under-response sit outside the frozen attack
 taxonomy, outside PKU-SafeRLHF's harm categories, and outside the QA-moderation
 classifier's taxonomy. All arms inherit them and no number in either results table
-penalises them. This is a limitation of the evaluation, not a difference between arms.
+penalises them. This is a limitation of the evaluation, not a difference between arms. The
+observation itself is reported in Section~\ref{sec:results:selfdisclosure}.
 
 \subsection{Ethics, licensing and release}
 \label{sec:methods:ethics}

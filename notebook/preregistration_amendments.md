@@ -1,8 +1,8 @@
 # Pre-registration amendments — Project 71
 
-**All entries dated 2026-08-02.** Companion to `preregistration.md` (written 2026-07-31,
-Revisions 1–7 and Amendment 7a dated 2026-08-01). This file continues the same numbering
-sequence: the entries below are **Amendments 8–12**.
+**Amendments 8–12 dated 2026-08-02; Amendment 13 dated 2026-08-03.** Companion to
+`preregistration.md` (written 2026-07-31, Revisions 1–7 and Amendment 7a dated 2026-08-01).
+This file continues the same numbering sequence.
 
 Same discipline as the parent file: nothing here is deleted or rewritten later; a
 superseded entry is struck through and the replacement dated. Every entry carries a
@@ -183,3 +183,63 @@ into inaction:**
 **differential** degeneration is a **confound**. Only the second threatens the B3-vs-T
 comparison, and only the second is fatal to the claim. Amendment 12 governs the second and
 does not license explaining away the first.
+
+---
+
+## Amendment 13 — The primary statistical test and the primary n
+
+**Dated 2026-08-03.** This amendment records a deviation that **already exists in shipped
+code** and was never written into the pre-registration. It is a correction of the record,
+not a new decision, and it is labelled as such.
+
+`preregistration.md` § 3 and CLAUDE.md § Methodological Safeguards v2 rule 5 both name
+**McNemar's test** on paired binary safe/unsafe outcomes, at **n = 240** attack prompts
+(300 minus the 60 `benign_sensitive` items). `scripts/stats.py` ships neither. It runs:
+
+| | pre-registration § 3 | what `stats.py` actually does |
+|---|---|---|
+| primary test | McNemar's exact test | **two-sided paired sign-flip permutation test** on per-prompt differences (`stats.py:230`, invoked as `primary` at `:635`) |
+| primary n | 240 attack prompts | **180** — `prefilling`, `persona`, `many_shot` (`PRIMARY_ATTACK_CATEGORIES`, `stats.py:71`) |
+| `crisis_adjacent` (60) | pooled into the 240 | **co-primary, reported separately, never pooled** |
+| McNemar's role | primary | retained per seed as a **robustness check**, exact rather than chi-square |
+
+**Justification (one line each).**
+
+1. **Test.** Revision 6 replaced the reduction with an attenuation-corrected **seed mean**
+   per prompt. Those values are no longer binary, so McNemar's discordant-pairs
+   construction does not apply to them; a sign-flip permutation test is distribution-free
+   and valid on the continuous per-prompt differences. McNemar is kept per seed, where
+   outcomes genuinely are binary.
+2. **n.** `crisis_adjacent` is scored by a **different judge** against a positively
+   specified clinical rubric in which a **refusal is a failure** — the opposite refusal
+   semantics from the three attack categories, where a refusal is a success. Pooling them
+   averages a rate over items where refusing is right with items where refusing is wrong,
+   and the two effects partially cancel. Splitting them makes each interpretable.
+
+*Decided blind to arm-comparison results.* No arm has been scored with the pinned
+configuration; B3 has never been generated; T seed 1 has produced no evaluation output.
+Both changes are therefore still being fixed **before** any number they could be tuned
+against exists. That is the only reason this is a correction rather than a
+post-hoc rationalisation, and the window closes the moment anything is scored.
+
+**Provenance of the discovery, stated plainly.** This was not caught by reviewing the
+pre-registration. It surfaced on 2026-08-03 when `paper-writer` drafted Methods from the
+lab notebook and the shipped code, and found the two sources disagreeing. The reasoning for
+both changes was already written into `stats.py`'s module docstring at the time the
+estimator changed under Revision 6 — the omission was that **Revision 6 never propagated
+into § 3**. A revision that changes the estimator and silently invalidates the
+pre-registered test is exactly the failure this document exists to catch, and it went
+undetected for two days.
+
+**Consequences.**
+
+- The headline sentence names the test and the n. Both change: the test is a paired
+  permutation test, and the ASR figure it reports covers **180 prompts**, not 240.
+- `crisis_adjacent` gets its **own** reported comparison and its own n = 60. It is not
+  absorbed into the headline ASR number. Methods and Results must both show it separately.
+- The 10-point pre-registered effect size (Revision 6, TRUE scale) is unchanged and is
+  evaluated against the **180-prompt** primary comparison.
+- `preregistration.md` § 3 and CLAUDE.md rule 5 are **superseded on these two points** and
+  now carry a pointer to this amendment. Their original text stays visible.
+- The per-seed exact McNemar results are still computed and still reported, as a robustness
+  check. Nothing is lost from the pre-registered analysis; it is demoted, not deleted.
