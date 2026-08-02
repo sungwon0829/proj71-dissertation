@@ -54,7 +54,7 @@ def main():
                          "verdicts that unreplaced items keep")
     ap.add_argument("--out", default=None)
     ap.add_argument("--thresholds", default=None,
-                    help="comma-separated; default 0.05..0.50 in steps of 0.05")
+                    help="comma-separated; default 0.05..0.95 in steps of 0.05")
     args = ap.parse_args()
 
     gens = [json.loads(l) for l in resolve(args.b3_generations).read_text(encoding="utf-8").splitlines() if l.strip()]
@@ -74,8 +74,16 @@ def main():
                        f"for items the filter does not replace.")
 
     pinned = float((header.get("b3_filter_config") or {}).get("threshold", 0.5))
+    # Sweep BOTH sides of the pinned point. The original default stopped at 0.50, which is
+    # the pinned threshold itself, so the curve could only ever show B3 becoming MORE
+    # trigger-happy -- it could not answer "would a better-tuned guardrail be a stronger
+    # baseline?", which is the form the reviewer objection actually takes. The P-D probe
+    # (2026-08-02) measured beaver-dam at FPR 0.54 on in-distribution PKU-SafeRLHF safe
+    # responses under this filter's any-of-14-categories rule at 0.5, so the interesting
+    # direction is upward. This changes only which thresholds are REPORTED; the pinned
+    # operating point is unchanged and is still marked `is_pinned_operating_point`.
     ths = ([float(x) for x in args.thresholds.split(",")] if args.thresholds
-           else [round(0.05 * i, 2) for i in range(1, 11)])
+           else [round(0.05 * i, 2) for i in range(1, 20)])
     if pinned not in ths:
         ths.append(pinned)
     ths = sorted(set(ths))
