@@ -243,3 +243,70 @@ undetected for two days.
   now carry a pointer to this amendment. Their original text stays visible.
 - The per-seed exact McNemar results are still computed and still reported, as a robustness
   check. Nothing is lost from the pre-registered analysis; it is demoted, not deleted.
+
+---
+
+## Amendment 14 — Two corrections to the record, and one self-inflicted incident
+
+**Dated 2026-08-03.** Neither item changes any pre-registered quantity, test, arm or judge.
+Both are recorded because they would otherwise be invisible.
+
+### 14a. The pin lock is immutable, and I broke it
+
+On 2026-08-03 I edited `configs/judges_pinned.lock.json` to annotate a stale
+`KNOWN INCONSISTENCY` entry (it claimed the DPO configs still contain `seed: 42`; that field
+was removed 2026-08-01 and `assert_no_config_seed()` now guards it). The intent was to make
+the staleness visible rather than silently rewrite it.
+
+**That edit broke the judge pin and blocked all scoring in the project.** `judges.yaml`
+records `pin_lock_sha256`, and `verify_judge_pin()` hard-fails when the lock's hash does not
+match — by design, because "two independent files must be edited in tandem to get past
+this". Editing the lock at all, for any reason, trips it. The lock's own
+`immutable_after_pin` field says so.
+
+**Resolution:** the lock is restored byte-for-byte to its pinned state
+(`89783c75c235652ff0d2f333bdbb82421430b0f0263b189b804f75f00098f8d7`) and the pin verifies.
+The correction it was carrying now lives here instead:
+
+> **The lock's `KNOWN INCONSISTENCY` entry is factually stale.** It states that
+> `configs/dpo_b2.yaml` and `configs/dpo_t.yaml` "both contain `seed: 42`". They do not, and
+> have not since 2026-08-01. The field was removed from all four configs and
+> `assert_no_config_seed()` raises if it returns. The lock text is left uncorrected **because
+> it cannot be corrected** — it is pinned, and this record supersedes it.
+
+**Rule going forward, so this is not repeated:** a pinned artefact is never edited, not even
+to correct an error in it, and not even to make an error more visible. Corrections to a pin
+are written in the mutable record that references the pin. This is the second time an
+attempt to improve an audit trail has damaged one; the first was reporting agent labels as
+hand-labelled.
+
+**Detection credit:** found by `data-wrangler` building the labelling package, whose
+`compute_kappa.py` refused to reach its GPU stage because the pin would not verify. The
+guard worked. My own first diagnosis of the cause was wrong — I compared against the
+committed (LF) blob rather than the working-tree (CRLF) bytes the hash is computed over, and
+briefly concluded the desync pre-dated my edit. It did not.
+
+### 14b. The pin hash is line-ending sensitive — flagged, not fixed
+
+`verify_judge_pin()` hashes the lock's raw bytes. Under Windows `core.autocrlf` the
+working-tree file is CRLF while the committed blob is LF, so the two hash differently: the
+recorded pin matches the **CRLF** form. A reviewer cloning this repository on Linux would
+get LF bytes and a hard `JUDGE PIN BROKEN` failure on a repository that is in fact correct.
+
+**Not fixed here**, deliberately: every available fix (normalising line endings before
+hashing, adding `.gitattributes`, re-pinning) changes either the pin's semantics or the
+working-tree bytes, and therefore the pin itself. That is a decision about the instrument and
+it is recorded for a decision rather than taken unilaterally while the pin is already the
+subject of an incident. **It must be resolved before the artefact is released**, or the
+reproducibility package fails for anyone not on Windows.
+
+### 14c. The original ASR worksheet was drawn from a void checkpoint
+
+The pre-rebuild 60-item worksheet sourced its `b1` items from **B1 v1** — the checkpoint
+retired for emitting a real therapist's name, which appears in no arm of the paper. Traced by
+exact response-text match. Had those 60 items been labelled, every κ would have been measured
+against generations from a model that does not exist in Table 1.
+
+Caught during the P-I rebuild, before any label was entered, so **no labelling work was
+lost**. The rebuilt worksheet points at the current pin-verified b0/b1 generation files and
+`verify_source_header()` now hash-checks the source at runtime so this cannot recur silently.
