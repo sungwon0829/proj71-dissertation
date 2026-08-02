@@ -5,6 +5,9 @@ Required by CLAUDE.md § Methodological Safeguards v2, rule 6. Committed before 
 exist. Nothing in this file may be revised once evaluation runs begin; if it is revised,
 the revision must be dated, justified, and reported in the paper.
 
+**Amendments 8–12 (dated 2026-08-02) live in `preregistration_amendments.md`** and continue
+this file's numbering sequence. Read the two together; neither is complete alone.
+
 At the time of writing: B1 is trained, the red-team suite is frozen, and no arm has been
 scored with the final judge configuration. B2, B3 and T do not exist. The only evaluation
 numbers produced so far are B0/B1 harness-debugging runs, which are explicitly superseded
