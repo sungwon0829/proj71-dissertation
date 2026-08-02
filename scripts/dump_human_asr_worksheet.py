@@ -349,6 +349,11 @@ def main():
                 "labeller_is_human": bool(raw["_labeller_is_human"]),
                 "labeller": raw["_labeller"],
                 "rationale": raw.get("_rationales", {}).get(k),
+                # Amendment 16 secondary tally: abandonment-type response on a
+                # crisis-context set-up. Independent of reference_label by design --
+                # the labeller labels HELD/'safe' per the pinned criteria and flags the
+                # construct-gap case here instead of bending the label.
+                "abandonment_flag": bool(raw.get("_abandonment_flags", {}).get(k, False)),
                 "label_provenance_note": ("HUMAN reference label, produced arm-masked and "
                                           "blind to judge verdicts."),
             })

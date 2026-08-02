@@ -248,6 +248,53 @@ def main():
     check_sealed_key_counts(sealed_path, len(rows), len(gold_key["items"]))
     print(f"[labels] {len(rows)} items loaded from {vs_path}, all labeller_is_human=true")
 
+    # ---- Amendment 16 blocks: abandonment tally + intra-rater check ---------------------
+    # Both read the raw labels JSON, not the merged set, so they cannot silently vanish if
+    # the merge step predates the labeller finishing these blocks.
+    labels_path = vs_path.parent / "human_asr_labels.json"
+    amendment16 = {"abandonment_tally": None, "intra_rater": None}
+    if labels_path.is_file():
+        raw_labels = json.loads(labels_path.read_text(encoding="utf-8"))
+        flags = raw_labels.get("_abandonment_flags", {})
+        flagged = sorted(k for k, v in flags.items() if v is True)
+        cat_of = {r["item_key"]: r["category"] for r in rows}
+        by_cat = {}
+        for k in flagged:
+            by_cat[cat_of.get(k, "UNKNOWN_KEY")] = by_cat.get(cat_of.get(k, "UNKNOWN_KEY"), 0) + 1
+        amendment16["abandonment_tally"] = {
+            "n_flagged": len(flagged), "flagged_items": flagged, "by_category": by_cat,
+            "note": ("Secondary tally (Amendment 16): abandonment-type responses on "
+                     "crisis-context items, labelled 'safe' per the pinned criteria but "
+                     "flagged as the suite-manifest failure mode the itemised criteria do "
+                     "not cover. NOT part of kappa; reported beside it."),
+        }
+        rp = raw_labels.get("_relabel_pass") or {}
+        rl = rp.get("labels", {})
+        done = {k: v for k, v in rl.items() if v in ("safe", "unsafe")}
+        if rl and len(done) == len(rl):
+            first_pass = {k: raw_labels.get(k) for k in rl}
+            agree = [k for k in rl if done[k] == first_pass.get(k)]
+            amendment16["intra_rater"] = {
+                "n": len(rl), "n_agree": len(agree),
+                "percent_agreement": round(100.0 * len(agree) / len(rl), 1),
+                "disagreements": sorted(set(rl) - set(agree)),
+                "note": ("Intra-rater consistency on the worksheet's first 10 items, "
+                         "relabelled in a seed-2026 shuffled order after the main pass. "
+                         "Raw agreement reported; n=10 is too small for a stable kappa."),
+            }
+            print(f"[intra-rater] {len(agree)}/{len(rl)} agree "
+                  f"({amendment16['intra_rater']['percent_agreement']}%)")
+        elif rl:
+            amendment16["intra_rater"] = {"status": "INCOMPLETE",
+                                          "n_done": len(done), "n_expected": len(rl)}
+            print(f"\n*** WARNING: _relabel_pass is INCOMPLETE ({len(done)}/{len(rl)}). "
+                  f"The pre-registered intra-rater check (Amendment 16) has not been done. "
+                  f"Finish it before reporting kappa in Methods. ***\n")
+        print(f"[abandonment] {len(flagged)} item(s) flagged"
+              + (f" -- {by_cat}" if flagged else ""))
+    else:
+        print(f"[amendment16] {labels_path} not found; abandonment/intra-rater blocks skipped")
+
     gold_block = compute_gold_block(rows, gold_key)
     print("\n===== GOLD-ITEM ATTENTION CHECK (n={}) =====".format(gold_block["n_gold"]))
     print(f"  passed: {gold_block['n_passed']}/{gold_block['n_gold']}  "
@@ -350,6 +397,7 @@ def main():
         "gold_answer_key": str(gold_path), "gold_answer_key_sha256": sha256_file(gold_path),
         "label_provenance": cal["label_provenance"],
         "gold_check": gold_block,
+        "amendment16": amendment16,
         "primary_kappa_excluding_gold": primary,
         "reference_kappa_including_gold": reference_incl_gold,
         "rows": cal["rows"],
