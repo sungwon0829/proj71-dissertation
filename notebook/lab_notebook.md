@@ -1909,3 +1909,70 @@ property of the anchor rather than noise.
 T_ctrl, because the acceptance criterion is **differential** — |loose(B2) - loose(T)| <= 3
 points overall and <= 5 points per attack category — and becomes computable the moment T exists.
 Spending a further 2 h on T_ctrl under a configuration we might then abandon would be waste.
+
+## 2026-08-02 — Status audit of five outstanding commitments; T seed 1 completed
+
+**1. RUN MANIFESTS — gap found and closed.** All nine manifests carried both training-data
+hashes, but **`cli_invocation` was missing from the five runs completed before the field was
+added** (B1 v1, B1 v2, B2 v1, v2, v3). Backfilled via `scripts\backfill_cli_invocation.py`
+(dry-run first, then applied). Every manifest now carries `sampled_data_sha256`,
+`consumed_data_sha256` and `cli_invocation`; verified programmatically — 9 manifests, 0 gaps.
+**Provenance discipline preserved:** the five backfilled entries are marked
+`"reconstructed": true` with the date and a warning that they were reconstructed from the
+notebook, the output-directory name and the config used, and are **not** evidence of the
+command actually typed. Runs from 2026-08-01 onward (B2 v4, T seed 1 and its two killed
+attempts) recorded the field live and carry no flag. Two reconstructions carry an extra caveat
+that re-running the argv today would **not** reproduce the run, because `dpo_b2.yaml` has since
+changed three times; B1 v1's carries the caveat that its training data is itself unrecoverable.
+
+**2. `notebook\related_work.md` — exists**, 2,113 lines, **12 top-level sections and 42
+individual paper entries**, with **52 distinct arXiv identifiers** and 122 lines carrying a
+URL/DOI/arXiv reference. Populated by the four-angle novelty search. Not yet reconciled against
+`paper\references.bib`, whose Block B still holds eight placeholder keys.
+
+**3. LLAMA GUARD — NO.** No access request was ever made on our HF account, and no Llama Guard
+or `meta-llama` directory exists in the local cache. **This is now moot rather than outstanding:**
+pre-registration Revision 2 replaced it. The B3 guardrail filter is `PKU-Alignment/beaver-dam-7b`
+and the ASR judge is the pinned Qwen behavioural rubric. CLAUDE.md's original "Llama Guard if
+Meta access granted" line is superseded by that revision. Nothing is blocked on it.
+
+**4. 60-ITEM ASR WORKSHEET — sampling confirmed clean; no gold items.**
+Read from `scripts\dump_human_asr_worksheet.py` rather than from its report. The eligible pool
+is filtered on exactly two criteria (line 150): exclusion by `(arm, id)` and by response text,
+both drawn from the four judge-prompt-tuning sets. **There is no degeneracy-flag condition, and
+no other filter of any kind.** Selection is `rng.sample(cand, per)` — uniform random within each
+of the three attack categories, 20 per category — over a pool deterministically sorted first
+(line 158), then shuffled, seed 2026 recorded in the sealed key. So: **random within category,
+not conditioned on degeneracy or on any judge verdict.**
+**Gold/attention-check items: NONE embedded** — zero matches for gold/attention-check/catch-trial
+patterns in the generator. Worth noting as a limitation: with no planted items there is no
+internal check on labelling attention, and the only cross-check available is the human-vs-judge
+agreement itself. The worksheet header is properly arm-masked and instructs labelling from the
+text alone.
+
+**5. CLAUDE.md CLAIM WORDING — updated.** THE ONE CLAIM now reads "preference optimisation"
+rather than "DPO", with a method note recording that the objective actually run is **DPO with an
+RPO-style NLL anchor on the chosen completion** (`loss_type: [sigmoid, sft]`,
+`loss_weights: [1.0, 1.0]`, `beta = 0.1`), that vanilla sigmoid-only DPO **failed to terminate**
+(23% cap-hit vs 5% for SFT, invariant to beta because the update was renormalised on 58–61% of
+steps), and that per Revision 5 the claim concerns **transfer** of general-harm safety data. The
+arms table gains T_ctrl and the line: **"B2" in all paper artifacts means B2 v4 only; v2 and v3
+appear solely in the termination-failure analysis** and are never a row in Table 1 or Table 2.
+
+## 2026-08-02 — T seed 1 COMPLETED (and an operational finding about background launches)
+
+**T seed 1 finished at 05:53** — `results\T_dpo_seed1\` holds the adapter, checkpoint-1246,
+manifest (live `cli_invocation`) and reference verification. The train-runner agent was stopped
+before it could report, so this was confirmed by inspecting the artefacts directly.
+
+**Two earlier attempts were killed, and the cause is an operational trap worth recording.**
+Both `T_dpo_seed1_KILLED_attempt1` and `_attempt2` died at step ~104 of 1246, **within three
+seconds of exactly 60 minutes after launch** (59:57.9 and 59:57.9). Not a code or config fault —
+every gate passed, `nvidia-smi` was clean afterwards, no python process survived, 763 GB free,
+no reboot. **Diagnosis: a hard ~60-minute ceiling on the background-launch mechanism used.**
+Both were launched with `run_in_background: true`. B2 v4, which ran 120.6 minutes to completion,
+was launched with shell-level `&` + `disown` inside a single foreground call — and survived.
+**Operational rule for the remaining runs:** any launch expected to exceed ~55 minutes must use
+`&` + `disown`, never `run_in_background: true`. This applies to T_ctrl and to B2/T seeds 2–3.
+The killed directories are preserved as the incident's provenance record and must never be
+confused with the real T seed 1 output.

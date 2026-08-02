@@ -1078,3 +1078,106 @@ the B2 v2 findings above -- this is triage, not a paper number.
 launched. Awaiting the coordinator's go-ahead given the acceptance criterion is differential
 (|loose(B2) - loose(T)| <= 3 points overall, <= 5 points per category) and can only be
 evaluated once T (and T_ctrl) are trained under the same configuration.
+
+## Configuration frozen; open observation and methodological finding to carry forward
+
+Coordinator decision 2026-08-02: attempt 1 accepted as-is, no attempt 2. **Frozen for all
+three arms: beta=0.1, `loss_type: [sigmoid, sft]`, `loss_weights: [1.0, 1.0]`, everything
+else unchanged.** The coordinator adopted the `many_shot_052` caveat verbatim as the
+Results-section framing: the degeneracy improvement removes a *measurement confound*
+(degeneration inflating ASR for reasons unrelated to safety alignment); it does not imply
+the model is safer, and B2 v4's clean degeneracy numbers must not be read that way.
+
+**Open observation, recorded so it is not silently lost (coordinator instruction):** the
+`[384, 508)` cap-hit "gap check" band was empty (0/300) for both B1 v2 and B2 v3, but
+non-empty (10/300) for B2 v4. Not investigated -- flagged only. If it recurs in T, it may
+be a property of the anchor (e.g. the sft term encouraging longer-but-terminating
+completions) rather than run-to-run noise; worth a deliberate look once T's number exists,
+not before.
+
+**Methodological finding for the paper (coordinator instruction -- write this up as a
+finding, not just an incidental fix):** vanilla DPO on this terse SFT policy (B1) failed to
+terminate on a materially large fraction of adversarial-suite responses -- 23.0-23.7% of
+generations reached the 512-token cap without ever emitting EOS, at both beta=0.1 and
+beta=0.3, i.e. beta did not control this failure mode (consistent with the grad-norm
+evidence showing the sigmoid term's gradient was being renormalised away regardless of
+beta). An RPO-style NLL anchor on the chosen completion (`loss_type=[sigmoid, sft]`,
+`loss_weights=[1.0, 1.0]`) resolved the non-termination pathway to BELOW the no-DPO SFT
+baseline (3.7% vs 5.0%) in a single attempt, without touching beta. This is worth stating
+plainly as a transferable finding for anyone building DPO on top of a small-corpus SFT
+policy: the failure mode was not "DPO with the wrong beta," it was "DPO alone, without an
+NLL anchor, on this kind of base policy" -- beta search would not have found it because
+beta was not the mechanism.
+
+## T seed 1 -- attempt 1 KILLED by an external/infrastructure event, not a code defect
+
+Launched under the frozen configuration above (`scripts\train_dpo.py --config
+configs\dpo_t.yaml --seed 1`). GPU courtesy check before launch: 2 MiB / 0% (idle). All
+pre-flight gates passed identically to B2 v4: LoRA fixed-template assert, 3-way
+hyperparameter-match assert (T vs B2 vs T_ctrl), data funnel (15,000 helpful + 4,924 safety
+= 19,924, matching B2's total volume), zero-truncation assert. Reference log-probs
+precompute ran to completion (~54 min, matching B2 v4's timing for the same data volume).
+BOTH the static and dynamic reference/gradient verification checks PASSED (adapters
+present, ref frozen and numerically identical to B1's trained default at init, default
+receives real gradients, ref's grad stays None). Training then started and progressed
+normally to step 104/1246 (~9 minutes into the loop, ~5.2-5.4s/it, no anomaly in the
+partial log) before the background process was **killed**.
+
+**Incident, investigated, not attributable to the training script or configuration:**
+`train.log` ends abruptly mid-progress-bar at step 104/1246 -- no Traceback, no CUDA OOM
+message, no completion marker. `nvidia-smi` immediately after showed a clean 2 MiB / 0%
+(consistent with the process actually exiting, not hanging or crashing mid-allocation);
+`tasklist` showed no remaining python.exe process. Ruled out: disk space (763 GB free,
+not the cause); reboot (`Win32_OperatingSystem.LastBootUpTime` unchanged from 2026-07-24);
+a Python-level exception (none printed) or CUDA OOM (none printed, and the memory footprint
+at the time, ~53 GB, was well under prior peak usage for this exact workload). Only
+correlation found, not confirmed as cause: Windows Event Log (System) shows WaaSMedicSvc
+and the Windows Update service entering the running state at 02:06:40-02:06:42, within
+~45-75s of the log's last write (02:05:57). No Application-log crash event for python.exe
+was found in the same window. This is a shared, RDP-accessed machine per CLAUDE.md
+("can be reimaged without notice"; long runs "survive an RDP disconnect but not a
+sign-out") -- an RDP sign-out in that window is a plausible alternate explanation that
+cannot be confirmed or ruled out from here.
+
+**Action taken:** preserved, did not delete, the killed attempt's partial artefacts --
+moved `results\T_dpo_seed1\{dpo_data_manifest.json, dpo_reference_verification.txt}` and
+`results\T_dpo_seed1_train.log` into `results\T_dpo_seed1_KILLED_attempt1\` (with a README
+documenting the above), so this directory cannot later be confused with the real run's
+output. Relaunched immediately into a clean `results\T_dpo_seed1\` -- same seed, same
+config, GPU reconfirmed idle first (2 MiB / 0%, no stray python.exe processes).
+**`sampled_data_sha256` on relaunch is byte-identical to the killed attempt's**
+(`3dc3e24d2d13131046a3983586fad6ec4d9fa4a382b4cb108140cd75143562f6`), confirming this is a
+faithful continuation of the same intended run, not a different sample. This was treated as
+an infrastructure interruption of an otherwise-healthy, correctly-gated run, not retried in
+a blind loop -- every gate that could have caught a real configuration or code problem had
+already passed before the incident.
+
+Status: T seed 1 relaunch in progress. Will report the full-suite degeneracy/cap-hit pass,
+the differential-criterion comparison against B2 v4 (overall and per category), and the
+manual re-scan of strict-or-loose items, then STOP before T_ctrl, per instruction.
+
+## CORRECTION: T seed 1 attempt 2 also killed -- true root cause found, supersedes the
+## "possibly Windows Update / RDP sign-out" speculation above
+
+The relaunch above (attempt 2) died the same way: every gate passed identically (including
+byte-identical `sampled_data_sha256` to attempt 1), reference/gradient verification passed,
+training progressed normally to **step 104/1246 again** -- then killed, with the same
+"no Traceback, no OOM, clean GPU release" signature.
+
+Two independent data points now available:
+- attempt 1: log birth 2026-08-02 01:05:57.064, death 02:05:57.075 -> **60:00.011** elapsed
+- attempt 2: log birth 2026-08-02 02:12:06.126, death 03:12:04.060 -> **59:57.934** elapsed
+
+Both killed within 3 seconds of exactly 60 minutes after launch. This rules out the earlier
+Windows-Update-timing correlation as coincidental (or at least not primary) and confirms
+the actual cause: **the Bash tool's `run_in_background: true` mechanism has a hard ~60-minute
+maximum duration.** Both T attempts were launched with `run_in_background: true`. B2 v4
+(120.6 min wall clock, completed successfully, no incident) was launched with shell-level
+`&` + `disown` inside a single foreground Bash call instead -- and was not killed.
+
+**Operational rule going forward, not just for this run:** any launch expected to exceed
+~55 minutes (every DPO run in this project, given the ~54-min reference precompute alone)
+MUST use `&` + `disown`, not `run_in_background: true`. Relaunched T seed 1 (attempt 3)
+under this corrected mechanism; will apply the same to T_ctrl and to B2/T seeds 2-3.
+Attempt 2's partial artefacts preserved (not deleted) in
+`results\T_dpo_seed1_KILLED_attempt2\`, same treatment as attempt 1.
