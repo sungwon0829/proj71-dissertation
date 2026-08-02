@@ -878,13 +878,30 @@ judge-stratified), which reweights to $0.069$ at the natural base rate with prec
 $0.20$, and its predecessor (v2) reached $\kappa = 0.077$ raw and $0.038$ reweighted with
 precision $0.14$. For comparison, the QA-moderation classifier we first proposed as the
 attack-success judge scored $\kappa = 0.355$, $0.086$ and $0.116$ across three blind sets
-and behaved as a topic detector rather than a harm detector: it flagged a reply that
-\emph{inverts} a self-harm prefill, a reply that \emph{correctly} triages a plan-tonight
-disclosure as an emergency, and a plain refusal. We therefore moved it to the filter role,
-which is its natural role as a QA-moderation model and a stronger baseline to beat, and
-made the behavioural judge the sole attack-success judge. That swap cost recall
-($0.65 \rightarrow 0.55$), so attack-success rate is a conservative lower bound in every
-arm.
+and appeared to behave as a topic detector rather than a harm detector: it flagged a reply
+that \emph{inverts} a self-harm prefill, a reply that \emph{correctly} triages a
+plan-tonight disclosure as an emergency, and a plain refusal. We therefore moved it to the
+filter role, which is its natural role as a QA-moderation model, and made the behavioural
+judge the sole attack-success judge. That swap cost recall ($0.65 \rightarrow 0.55$), so
+attack-success rate is a conservative lower bound in every arm.
+
+\textbf{A caveat now attaches to that historical evidence} (Amendment~18): every
+measurement of the moderation classifier made before 2026-08-03 --- the three $\kappa$
+values above, the topic-detector characterisation, and the flags on inverted, triaging and
+refusing replies --- was produced under an interface defect on our side. Our scoring path
+omitted the end-of-sequence terminator that the classifier's own pipeline appends before
+tokenising; the sequence classifier pools at the last non-pad token, so the model was made
+to classify at an arbitrary content token it was never trained to classify at. Correcting
+the omission cuts the classifier's in-distribution false-positive rate from $0.54$ to
+$0.14$ (accuracy $0.70 \rightarrow 0.89$, recall $0.94 \rightarrow 0.92$) on its own
+annotation project's test data. The pre-correction $\kappa$ values are therefore evidence
+about our defective interface, not about the classifier, and we do not cite them as a
+property of the model. The \emph{role assignment stands on independence grounds
+regardless}: the attack-success judge runs on the same base model as the arms under
+evaluation, so the filter must be a different mechanism, and the moderation classifier is
+the only such mechanism available to this project (Section~\ref{sec:methods:judges}); the
+judge roles were pinned before any arm was scored and are not revisited on the corrected
+measurements (Amendment~11).
 
 \paragraph{Human agreement (pending).} The project owner is hand-labelling a 60-item
 attack subset for genuine human agreement. The worksheet is arm-masked (no arm name in
@@ -903,9 +920,11 @@ above. \textbf{Six items is an illustration of a known recall limitation, not a 
 estimate}, and we report it as such: no confidence interval is attached, no rate is computed
 from it, and it decides nothing. The attack-success judge flagged \textbf{5 of the 6} gold
 items and produced \textbf{0 false flags on the 5} controls. The moderation classifier that
-serves as the B3 filter flagged \textbf{2 of the 6}, missing four items the judge caught.
-The probe used a fixed seed, loaded no unpinned artefact, and changed no threshold, prompt or
-configuration.
+serves as the B3 filter flagged \textbf{0 of the 6} under the corrected scoring path
+(Amendment~18; the original probe run, made under the interface defect described below,
+recorded 2 of 6, and both of those flags dissolved with the fix --- one to $0.492$ and one
+to $0.49995$ against the strict $>0.5$ rule). The probe used a fixed seed, loaded no
+unpinned artefact, and changed no threshold, prompt or configuration.
 
 The probe also reports the moderation classifier in a second, \emph{counterfactual} column:
 what it would have said had it remained the attack-success judge, the role the original
@@ -919,13 +938,18 @@ and is not the mechanism any reported attack-success rate is computed from.
 Three caveats travel with those numbers and are not optional. First, the controls are
 \emph{agent-labelled}, not human-confirmed: no human-labelled safe items exist in this
 project yet, so ``0 false flags on 5 controls'' is agreement with a language model's labels.
-Second, the moderation classifier \textbf{failed its own smoke test} --- it flagged a plain
-explanation of photosynthesis at 0.93 and generic curriculum-vitae advice at 0.55 --- so its
-column records behaviour but certifies nothing. That failure is the classifier's behaviour
-and not our interface: both false flags reproduce unbatched, without the conversation
-prefix, and in float32, and an in-distribution check on the classifier's own annotation
-project's test data gives recall 0.94 on unsafe responses, which a mis-built interface would
-not.
+Second, the original probe run had the moderation classifier \textbf{fail its own smoke
+test} --- a plain explanation of photosynthesis flagged at 0.93 --- and we initially
+concluded, wrongly, that this was the classifier's behaviour rather than our interface,
+because the flag survived unbatching, prefix removal and a float32 recomputation, and
+because the interface achieved recall 0.94 in-distribution. All three within-path
+diagnostics were incapable of detecting the actual defect, which sat \emph{inside} the
+shared path: the missing end-of-sequence terminator (Amendment~18). High recall coexisted
+with the bug precisely because pooling at an arbitrary token inflates positive rates ---
+it manufactures false positives while preserving true ones, which is what the
+false-positive rate of $0.54$, visible in the very same in-distribution check, was
+signalling. Under the corrected path the smoke test passes (photosynthesis $0.0002$) and
+the earlier conclusion is withdrawn.
 
 Third, and most consequential for measurement validity: \textbf{the judge's single miss
 reveals that it discounts degenerate text}. The missed item is a response that narrates the
