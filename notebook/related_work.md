@@ -2111,3 +2111,179 @@ task, and learning-rate mismatches. Reference by URL only, not BibTeX:
   this agent's own inference, not a finding either cited paper makes about the other —
   restated here for emphasis since it is the kind of connective claim that is easy to
   mis-cite as if it were a direct finding.
+
+
+---
+
+## Search: novelty re-check + guardrail-successor + domain-transfer pass (2026-08-02, lit-scout, P-H)
+
+**Trigger:** task P-H — full pass to (1) re-run the exact-comparison novelty check with fresh eyes, (2) fill citation gaps in the anchored-DPO/RPO/NLL-anchor lineage, (3) fill the suite's citation base (Llama-Guard successors, safety-transfer-across-domains literature). Builds on, does not repeat, the three sessions already logged above (entries 1-38, 46 papers total after this pass).
+
+**ESCALATION — READ FIRST.** One paper missed by all three prior sessions and highly likely to be raised by a reviewer: **Sharma, Mrinank, and 42 co-authors (Anthropic). "Constitutional Classifiers: Defending against Universal Jailbreaks across Thousands of Hours of Red Teaming." arXiv:2501.18837, Jan 2025 (preprint; underlies Anthropic's public ASL-3 deployment report; not confirmed peer-reviewed at a conference/journal).**
+
+**This does NOT run our exact controlled comparison, and does not scoop us — for a precise, load-bearing structural reason, confirmed by direct fetch of Anthropic's own research page: "Classifiers function as an addition rather than a replacement."** Constitutional classifiers are tested strictly ON TOP OF an already harmlessness-trained model (defense-in-depth — structurally our excluded "T+" arm), never as an ALTERNATIVE applied to a model with no training-time safety work (our B3-vs-T design, where each arm gets exactly one safety mechanism from an identical helpfulness-only base). There is no arm in this paper isolating "filter only, no training-time safety" against "training-time safety only, no filter."
+- **Claims:** harmlessness training (Constitutional-AI/RLHF-style) alone leaves substantial jailbreak vulnerability; layering input/output constitutional classifiers on top dramatically reduces universal-jailbreak success (3,000+ red-team hours, 10,000 synthetic jailbreaks), at a small measured over-refusal cost (+0.38 pp production-traffic refusals) and +23.7% inference overhead.
+- **Evaluates:** Claude 3.5 Sonnet, general assistant, CBRN/mass-casualty threat model — not therapy. No reward-model helpfulness score found as a third axis.
+- **Relation to our claim: the most prominent near-miss found across all sessions — adjacent, not same.** Directionally complicating for the premise that training-time safety alone suffices (reported ~14% ASR / ~86% jailbreak success for harmlessness-training-alone on their toughest automated eval, vs. single digits once classifiers are added), but not disconfirming, since it never tests the filter as a standalone alternative. Domain, threat model, and safety-training mechanism (RLHF, not DPO with constructed preference pairs) all differ further. **Cite regardless of the novelty question** — a knowledgeable reviewer will expect it discussed.
+- **Verification caveat:** the ~16%/~14%/~2% and ~86%/~4.4% figures are corroborated across multiple independent search-engine syntheses and one direct Anthropic-blog quote, but NOT independently confirmed via a verbatim primary-source table read (four fetch attempts on arXiv abstract/HTML/PDF and two third-party summaries all failed to extract the table text — PDF is image/binary-heavy, HTML render returned no body). The qualitative/structural finding (addition, not alternative) IS independently corroborated three separate times and is reported with high confidence; the exact percentages are not, and should be re-verified from the primary PDF before being cited with a specific number in the dissertation. **43-author list not reproduced/verified beyond the lead author.**
+
+```bibtex
+@article{sharma2025constitutionalclassifiers,
+  title={Constitutional Classifiers: Defending against Universal Jailbreaks across Thousands of Hours of Red Teaming},
+  author={Sharma, Mrinank and others},
+  journal={arXiv preprint arXiv:2501.18837},
+  year={2025},
+  note={Anthropic. 43 authors total per the arXiv listing; only the lead author independently confirmed here --- verify full author list from arXiv before submission.}
+}
+```
+
+**Re-closure of the "59.7%->3.0%" unverified lead** (originally flagged in the therapy-eval session above, not a new paper entry): a second direct fetch of Egida's full text (arXiv:2502.13603) in this session again confirmed the paper contains no such figure (its own range is "10%-30%" ASR reduction, "around 5%" best-defended style). The 59.7%/3.0%/30%/10% figures that keep surfacing in search summaries most likely arise from summarizer conflation with Constitutional Classifiers' own distinct figures (~16%/~14%/~2%, ~86%/~4.4%, from two different evaluation rounds in that one paper). Per standing instruction, **remains unlisted as a citation.** Closed with higher confidence than the prior session (direct primary-source re-check, not just failed re-search).
+
+---
+
+### 39. Lee, Bai, Pres, Wattenberg, Kummerfeld, Mihalcea. "A Mechanistic Understanding of Alignment Algorithms: A Case Study on DPO and Toxicity." arXiv:2401.01967, Jan 2024 (preprint; not confirmed peer-reviewed).
+- **Claims:** DPO reduces toxic outputs by learning a representation-space offset that steers generation away from a toxic region, without removing the underlying capability learned in pretraining — the capability is "bypassed," not erased, and can be reactivated by intervening on the discovered offset.
+- **Evaluates:** GPT2-medium only (not a chat-tuned model, not 7B-scale); toxicity-continuation tasks. **No jailbreak/ASR evaluation, no guardrail comparison, no therapy domain.**
+- **Relation to our claim: adjacent, flagged as potentially complicating for mechanism, not result.** A plausible mechanistic account of why our T arm might still show nonzero ASR against a targeted attack (structurally similar in spirit to the shallow-alignment account already cited via Qi et al., entry #16) — but GPT2-medium/toxicity-continuation is a large scope gap from Qwen2.5-7B-Instruct/adversarial jailbreaks in a therapy domain. Suggestive background, not direct evidence; do not over-cite as if it predicts our result.
+
+```bibtex
+@article{lee2024mechanistic,
+  title={A Mechanistic Understanding of Alignment Algorithms: A Case Study on {DPO} and Toxicity},
+  author={Lee, Andrew and Bai, Xiaoyan and Pres, Itamar and Wattenberg, Martin and Kummerfeld, Jonathan K. and Mihalcea, Rada},
+  journal={arXiv preprint arXiv:2401.01967},
+  year={2024}
+}
+```
+
+---
+
+### 40. Khan, Winecoff, Bogen, Hadfield-Menell. "Safety Drift After Fine-Tuning: Evidence from High-Stakes Domains." arXiv:2604.24902, Apr 2026 (preprint; not confirmed peer-reviewed).
+- **Claims:** benign, task-specific fine-tuning (medical/legal; LoRA, QLoRA, full FT) induces large, heterogeneous, often-contradictory safety changes — most fine-tuned models improve on some safety benchmarks while degrading on others (median Spearman ρ = 0.23 between benchmarks measuring nominally similar constructs, some pairs negative); no reliable relationship between weight-distance moved and safety change.
+- **Evaluates:** 16 medical + 15 legal fine-tuned models against 7 safety benchmarks (HEx-PHI, MLCommons, MedSafetyBench, CARES, SORRY-Bench, SafeLawBench, Trident). **No DPO-vs-filter comparison, no red-team ASR suite of our kind, no therapy domain.**
+- **Relation to our claim: adjacent, load-bearing for Discussion.** Per pre-registration Revision 5, our claim is scoped to whether general-harm safety data transfers to therapy-domain attacks — this is independent, larger-scale evidence that safety changes under domain fine-tuning are not even reliably directional, tempering any single-suite transfer result (positive or null) as one data point in a field with documented unreliable transfer, not a general law.
+
+```bibtex
+@article{khan2026safetydrift,
+  title={Safety Drift After Fine-Tuning: Evidence from High-Stakes Domains},
+  author={Khan, Emaan Bilal and Winecoff, Amy and Bogen, Miranda and Hadfield-Menell, Dylan},
+  journal={arXiv preprint arXiv:2604.24902},
+  year={2026}
+}
+```
+
+---
+
+### 41. Kalinich, Luccarelli, Santa Maria, Williams, Moss, Torous. "Evaluating the Effect of Mental Health Fine-Tuning Relative to Other Model Characteristics on LLM Safety Performance." medRxiv 2026.01.02.25343289, Jan 2026 (preprint; not peer-reviewed).
+- **Claims:** across 127 open-source models (Gemma/Llama/Qwen, ~270M-70B), general instruction tuning improved therapy-request/engagement detection, but **mental-health-specific, medical, or safety-specific fine-tuning conferred no consistent safety benefit** on psychiatrist-reviewed classification tasks and was sometimes associated with reduced performance; baseline model capability predicted outcomes better than domain-specific fine-tuning did.
+- **Evaluates:** 3 psychiatrist-reviewed synthetic classification tasks across base/instruction-tuned/medical-tuned/mental-health-tuned/safety-tuned variants. **Classification, not generation; no DPO; no red-team ASR suite; no guardrail-filter arm; no over-refusal/helpfulness metric in our sense.**
+- **Relation to our claim: closest domain match found for "does mental-health-specific training help safety," and directly complicating for our premise — must be addressed, not omitted.** Different task (classification vs. our generative ASR) and different training (broad SFT variants vs. DPO with constructed safety pairs), but the same underlying question. Our own safety pairs are NOT mental-health-specific (11.8% keyword coverage per Revision 5) — so this paper's finding about *domain-matched* fine-tuning not helping isn't a direct precedent for our *domain-mismatched* intervention either way, but is evidence the naive "domain-relevant safety data helps" assumption cannot be taken for granted here, cutting against over-generalizing any positive T-vs-B3 result. **Verification caveat:** direct PDF fetch returned HTTP 403 (access-gated); summary reconstructed from search-engine snippets of the abstract/findings, not a full-text read — re-verify before citing specific figures.
+
+```bibtex
+@article{kalinich2026mentalhealthfinetuning,
+  title={Evaluating the Effect of Mental Health Fine-Tuning Relative to Other Model Characteristics on {LLM} Safety Performance},
+  author={Kalinich, Mark and Luccarelli, James and Santa Maria, John and Williams, Gwydion and Moss, Frank and Torous, John},
+  journal={medRxiv},
+  year={2026},
+  note={medRxiv 2026.01.02.25343289; preprint, not peer-reviewed; PDF access-gated (HTTP 403), summary reconstructed from search snippets --- re-verify before citing specific figures.}
+}
+```
+
+---
+
+### Guardrail/moderation-model successors (suite citation base — "Llama Guard and successors" per task brief)
+
+Existing entry #25 cites Llama Guard (Inan et al., 2023) as the archetypal filter our B3 arm instantiates. Three successors added below; none changes the novelty verdict — each is a filter/classifier-only paper with no training-time-safety comparison, same relationship to our claim as Llama Guard/BeaverTails already in the bibliography.
+
+### 42. Han, Rao, Ettinger, Jiang, Lin, Lambert, Choi, Dziri. "WildGuard: Open One-Stop Moderation Tools for Safety Risks, Jailbreaks, and Refusals of LLMs." NeurIPS 2024, Datasets and Benchmarks Track (peer-reviewed). arXiv:2406.18495.
+- **Claims:** one open moderation model jointly handles prompt-harm, response-harm, and refusal detection, trained on WildGuardMix (92K examples incl. adversarial jailbreaks); outperforms Llama Guard 2 by +25.3% on refusal detection.
+- **Evaluates:** classification F1 against WildGuardTest (5K human-annotated) and other benchmarks. **Not a training-vs-filter comparison; no DPO arm; no therapy domain.**
+- **Relation: different (tooling background)** — Llama-Guard-class successor, same category as B3's filter mechanism, not competing work on the training-time question. Useful for a Limitations sentence noting a more modern moderation model might make a stronger B3 baseline than `beaver-dam-7b`.
+
+```bibtex
+@inproceedings{han2024wildguard,
+  title={{WildGuard}: Open One-Stop Moderation Tools for Safety Risks, Jailbreaks, and Refusals of {LLM}s},
+  author={Han, Seungju and Rao, Kavel and Ettinger, Allyson and Jiang, Liwei and Lin, Bill Yuchen and Lambert, Nathan and Choi, Yejin and Dziri, Nouha},
+  booktitle={Advances in Neural Information Processing Systems (NeurIPS), Datasets and Benchmarks Track},
+  volume={37},
+  year={2024},
+  note={arXiv:2406.18495}
+}
+```
+
+### 43. Zeng, Liu, Mullins, Peran, Fernandez, Harkous, Narasimhan, Proud, Kumar, Radharapu, Sturman, Wahltinez. "ShieldGemma: Generative AI Content Moderation Based on Gemma." arXiv:2407.21772, Jul 2024 (Google; preprint, venue beyond arXiv not confirmed).
+- **Claims:** instruction-tuned safety classifiers (2B/9B/27B, Gemma2-based) for input/output moderation across 4 harm types; +10.8 AU-PRC over Llama Guard, +4.3 over WildGuard on public benchmarks.
+- **Evaluates:** AU-PRC classification accuracy. **Not a training-vs-filter comparison; no DPO arm; no therapy domain.**
+- **Relation: different (tooling background)** — another Llama-Guard-class successor, same relationship as WildGuard above.
+
+```bibtex
+@article{zeng2024shieldgemma,
+  title={{ShieldGemma}: Generative {AI} Content Moderation Based on Gemma},
+  author={Zeng, Wenjun and Liu, Yuchi and Mullins, Ryan and Peran, Ludovic and Fernandez, Joe and Harkous, Hamza and Narasimhan, Karthik and Proud, Drew and Kumar, Piyush and Radharapu, Bhaktipriya and Sturman, Olivia and Wahltinez, Oscar},
+  journal={arXiv preprint arXiv:2407.21772},
+  year={2024}
+}
+```
+
+### 44. Ghosh, Varshney, Galinkin, Parisien. "AEGIS: Online Adaptive AI Content Safety Moderation with Ensemble of LLM Experts." arXiv:2404.05993, Apr 2024 (NVIDIA; preprint). Successor: Ghosh, Varshney, Sreedhar, Padmakumar, Rebedea, Varghese, Parisien, "AEGIS2.0: A Diverse AI Safety Dataset and Risks Taxonomy for Alignment of LLM Guardrails," NAACL 2025 (peer-reviewed, Vol. 1 Long Papers, pp. 5992-6026).
+- **Claims:** AEGIS trains guardrail classifiers on a 13-category taxonomy with an online adaptive ensemble-of-experts scheme; AEGIS2.0 extends to 34,248 samples, 12 core + 9 fine-grained risk categories, for commercial-grade guardrail training.
+- **Evaluates:** classifier accuracy against the AEGIS taxonomy. **Not a training-vs-filter comparison; no DPO arm; no therapy domain.**
+- **Relation: different (tooling background)** — third Llama-Guard-class successor. WildGuard + ShieldGemma + AEGIS/AEGIS2.0 together are useful for a Methods sentence situating `beaver-dam-7b` among the current guardrail-classifier landscape rather than presenting it as the only or most current option.
+
+```bibtex
+@article{ghosh2024aegis,
+  title={{AEGIS}: Online Adaptive {AI} Content Safety Moderation with Ensemble of {LLM} Experts},
+  author={Ghosh, Shaona and Varshney, Prasoon and Galinkin, Erick and Parisien, Christopher},
+  journal={arXiv preprint arXiv:2404.05993},
+  year={2024}
+}
+@inproceedings{ghosh2025aegis2,
+  title={{AEGIS2.0}: A Diverse {AI} Safety Dataset and Risks Taxonomy for Alignment of {LLM} Guardrails},
+  author={Ghosh, Shaona and Varshney, Prasoon and Sreedhar, Makesh Narsimhan and Padmakumar, Aishwarya and Rebedea, Traian and Varghese, Jibin Rajan and Parisien, Christopher},
+  booktitle={Proceedings of the 2025 Conference of the North American Chapter of the Association for Computational Linguistics: Human Language Technologies (Volume 1: Long Papers)},
+  pages={5992--6026},
+  year={2025},
+  address={Albuquerque, New Mexico},
+  organization={Association for Computational Linguistics}
+}
+```
+
+---
+
+### Anchored-DPO / RPO lineage — confirmation note, not a new entry
+
+The DPO-degeneration search session above already cites `pang2024irpo` (Pang et al., "Iterative Reasoning Preference Optimization," NeurIPS 2024, arXiv:2404.19733) as the source of the NLL-anchor/DPO+NLL hybrid loss and flagged that TRL's exact parameter name needed live verification. **This session independently confirms, against current TRL documentation, that the "RPO" name and `rpo_alpha` config field are named specifically after this paper**: TRL's docs state the RPO loss is "essentially... the SFT loss on the chosen preferences together with a weighted DPO loss," configured via `rpo_alpha` in `DPOConfig` (paper-suggested weight 1.0), written as ℒ_RPO = λ₁ℒ_DPO(y_w,y_l) + λ₂ℒ_NLL(y_w). This closes the earlier session's terminology/citation verification item — **`pang2024irpo` is confirmed, from two independent angles now, as the correct load-bearing citation for "RPO-style NLL anchor" in Methods.** Still open: whether the project's actual `configs/dpo_t.yaml` exercises `rpo_alpha` directly or the `loss_type=["sigmoid","sft"]`+`loss_weights` route (both are TRL-documented paths to the same objective) is a config-ownership question for `train-runner`, not resolved by literature search.
+
+A further, more marginal mechanistic touchpoint for the same question (why chosen-completion likelihood, including EOS, isn't reliably maintained by vanilla sigmoid DPO): **Fodeh, Ma, Puthiaraju, Talakokkul, Khan, Hagaman, Lowe, Roundtree, "TAB-PO: Preference Optimization with a Token-Level Adaptive Barrier for Token-Critical Structured Generation," arXiv:2603.00025, Feb 2026 (preprint, not confirmed peer-reviewed).** Derives that for standard sigmoid DPO, gradient contributions from shared preferred/rejected tokens preceding the first divergence point cancel exactly, so DPO gives no direct corrective signal to under-confident preferred tokens in that shared prefix — complementary to, not identical with, Razin et al.'s likelihood-displacement account already cited (`razin2025likelihooddisplacement`). **Caveats:** Feb 2026 unpublished preprint; target application is medical structured annotation/NER with 1-3-token edit distances, not open-ended chat generation; no direct claim about EOS-token probability or generation termination was found. Cited as one more mechanistic data point, not a direct account of the project's own 23%-vs-5% non-termination finding. **No paper was found in this session (or the earlier degeneration session) that names EOS-token non-emission/generation non-termination as its own primary, quantified phenomenon under DPO** — this gap remains open; the project's 23%/5% figures should be described in Methods as an original empirical observation explained by, but not independently replicated in, the cited mechanistic literature (Razin et al., Feng et al., Pal et al., this TAB-PO note).
+
+```bibtex
+@misc{fodeh2026tabpo,
+  title={{TAB-PO}: Preference Optimization with a Token-Level Adaptive Barrier for Token-Critical Structured Generation},
+  author={Fodeh, Samah and Ma, Linhai and Puthiaraju, Ganesh and Talakokkul, Srivani and Khan, Afshan and Hagaman, Ashley and Lowe, Sarah R. and Roundtree, Aimee Kendall},
+  year={2026},
+  note={arXiv:2603.00025; preprint, not confirmed peer-reviewed}
+}
+```
+
+---
+
+## Summary table (this pass, 2026-08-02)
+
+| # | Paper | DPO/pref-opt safety mixing? | Guardrail-filter baseline compared as ALTERNATIVE (not addition)? | ASR + over-refusal + helpfulness triad? | Same/adjacent/different |
+|---|---|---|---|---|---|
+| — | Constitutional Classifiers (Sharma et al., 2025) | No (RLHF/Constitutional-AI) | **No — addition on top of training, not alternative to it** | ASR + refusal-rate proxy; no helpfulness reward score found | **most prominent near-miss, not same** |
+| 39 | DPO and Toxicity (Lee et al., 2024) | Yes (DPO), GPT2-medium only | No | No (toxicity continuation) | adjacent (mechanism, complicating) |
+| 40 | Safety Drift After Fine-Tuning (Khan et al., 2026) | No | No | No (7 safety benchmarks, no ASR/OR/helpfulness triad) | adjacent (premise-complicating) |
+| 41 | Mental Health Fine-Tuning safety (Kalinich et al., 2026) | No (SFT variants, classification) | No | No | adjacent (closest domain match, transfer question) |
+| 42 | WildGuard (Han et al., NeurIPS'24) | No | N/A — is a filter | N/A | different (tooling) |
+| 43 | ShieldGemma (Zeng et al., 2024) | No | N/A — is a filter | N/A | different (tooling) |
+| 44 | AEGIS / AEGIS2.0 (Ghosh et al., 2024/2025) | No | N/A — is a filter | N/A | different (tooling) |
+
+**Still no row that is "same."** Combined across all four search sessions (46 papers total), the verdict is unchanged and strengthened by Constitutional Classifiers as the most prominent general-domain near-miss: **no paper trains a model with safety preference pairs mixed into preference optimisation and compares its ASR against an otherwise-identical model wrapped in a bolted-on guardrail filter used as an alternative (not addition), with over-refusal and helpfulness as bounded costs, in the therapy domain or any other.** Evidence only; the main thread makes the novelty call.
+
+## Open gaps / follow-ups from this session
+
+- Constitutional Classifiers' exact ASR ablation table needs a manual PDF read before any specific percentage is cited — four automated fetch attempts could not extract it (image/binary-heavy PDF; empty HTML render).
+- Constitutional Classifiers' full 43-author list is not reproduced/verified beyond the lead author — verify from arXiv before submission.
+- The medRxiv mental-health fine-tuning paper could not be fetched directly (HTTP 403) — summary reconstructed from search snippets only; re-verify methodology/figures from the actual PDF.
+- TAB-PO is a Feb 2026 unpublished preprint in a different application domain (medical structured annotation) — marginal, not load-bearing; do not lean on it as primary support for the EOS/termination finding.
+- The `rpo_alpha` vs. `loss_type=["sigmoid","sft"]`+`loss_weights` question — which one `configs/dpo_t.yaml` actually exercises — is still not independently confirmed against installed TRL 1.9.0 source; a config-ownership item for `train-runner`, not resolved by literature search.
