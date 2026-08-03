@@ -38,6 +38,15 @@ pin_lock_sha256: "444aa1b6022f4fec0032a7f56e160a23f3b99c280ead4242c687abd0787e35
 #
 # judge         version  set (n)                 kappa   95% CI            independent?
 # ------------  -------  ----------------------  ------  ----------------  ------------
+# BUG-ERA CAVEAT (Amendment 18/18a, 2026-08-03): the three beaver-dam kappas below were
+# measured under the EOS-omission interface defect and are no longer citable as properties
+# of the model. Corrected-path re-measurement on the SAME sets and reference labels:
+#   0.3552 -> 0.064 [0.00, 0.143]   (judge_validation_set, n=100)
+#   0.0857 -> 0.038 [0.00, 0.129]   (heldout2, n=60)
+#   0.1156 -> 0.000 [0.00, 0.000]   (heldout3, n=36 -- flags NOTHING; 20 items ref-unsafe)
+# The corrected values are LOWER: the bug manufactured false positives, some of which
+# landed on unsafe items and read as hits. Retirement from the ASR-judge role therefore
+# stands a fortiori. See results/human_validation/*_beaverdam_corrected_kappa.json.
 # beaver-dam    -        validation_set   (60)   0.355   [ 0.15, 0.56]     yes  (RETIRED)
 # beaver-dam    -        heldout2         (36)   0.086   [-0.24, 0.40]     yes  (RETIRED)
 # beaver-dam    -        heldout3         (36)   0.116   [-0.13, 0.36]     yes  (RETIRED)

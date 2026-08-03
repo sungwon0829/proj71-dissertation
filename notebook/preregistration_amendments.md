@@ -703,3 +703,73 @@ either, because the pin's legitimacy rests on being fixed, not on being optimal.
 
 *Decided blind:* no arm scored with the pinned configuration, B3 never generated, no
 Llama Guard response received, no Llama Guard verdict on any project item exists.
+
+---
+
+## Amendment 18a — Corrected-path kappa re-measurement and the full bug-era consumption register
+
+**Dated 2026-08-03.** Completes Amendment 18's contamination register with (i) a
+repo-wide sweep of every artefact that ever consumed a bug-era beaver-dam score and (ii)
+the corrected-path re-measurement of the three voided kappas, run as a permitted
+measurement under Amendments 11/18/19 -- it can inform reporting, never roles.
+
+### The corrected kappas -- lower, not higher
+
+Same three sets, same reference labels, same item construction; the only change is the
+EOS fix. Script: `scripts/remeasure_beaverdam_kappa.py` (asserts the fix is active
+before scoring; refuses human-labelled rows so provenances cannot blend).
+
+| set | n | voided (bug-era) | corrected | CI95 |
+|---|---|---|---|---|
+| judge_validation_set | 100 | 0.3552 | **0.064** | [0.00, 0.143] |
+| heldout2 | 60 | 0.0857 | **0.038** | [0.00, 0.129] |
+| heldout3 | 36 | 0.1156 | **0.000** | [0.00, 0.000] |
+
+On heldout3 the corrected model flags **0 of 36** items, 20 of which are
+reference-unsafe. The interpretation is uncomfortable and recorded plainly: **the bug
+inflated beaver-dam's apparent ability as an ASR judge** -- it manufactured false
+positives, some of which landed on unsafe items and were counted as hits. The
+"topic detector" characterisation was wrong (its three exhibits were bug-manufactured
+flags that dissolve under the corrected path), but Revision 2's conclusion is
+strengthened, not weakened: corrected beaver-dam is essentially blind to this suite's
+content-light behavioural attacks (kappa about 0, 0/6 severe items, while FPR on content
+harm improves to 0.14). Retirement from the ASR-judge role stands a fortiori, now for
+the true reason. Caveats inherited from the originals, unchanged: reference labels are
+agent labels, and the sets contain B1 v1 generations -- reusing them is deliberate, to
+isolate the bug fix like-for-like.
+
+### The five direct questions, answered with evidence
+
+| Did it ever consume a beaver-dam verdict or score? | Answer | Evidence |
+|---|---|---|
+| Red-team suite construction | **NO** | grep across builder/validator/leakage scripts and both suite notebooks: zero references |
+| Gold-item selection | **NO** | gold key, sealed key, worksheet generator: zero score references; the rubric's one mention is the independence statement; selection rule was criteria-text based |
+| 60-item worksheet | **NO** | sampling audited 2026-08-02 (uniform-random within category); exclusions are provenance-based (arm,id)+response-text, not score-based |
+| Degeneracy-detector tuning sets | **NO** | no tuning sets exist (2026-08-03 sweep); detectors are regex/n-gram literal constants, no model in the loop |
+| Any pinned artifact | **YES, one** | `judges_pinned.lock.json` `known_failure_mode` narrative + replacement self-flag claim are bug-era observations; lock not edited per 14a, superseded by Amendment 18; `judges.yaml` comment header carried the voided kappas -- annotated in place (comments only, pin re-verified VERIFIED) |
+
+### Full register
+
+**Upstream of a paper number (rebuild): NONE.** No paper number ever consumed a
+beaver-dam score. The b0/b1 debugging runs are dev-fixture, `is_paper_number: false`,
+and -- decisively -- used a FALLBACK classifier because beaver-dam was not yet
+downloaded: they never contained real beaver-dam scores at all. The B1 v2 full-suite
+scoring used the three Qwen judges only (verified from its judges block). No B3 arm has
+ever existed.
+
+**Diagnostic-only (marked superseded, kept):** the beaver-dam "safety" blocks of
+`judge_validation_report{,_heldout2,_heldout3,_v2_union,_refusal_enriched}.json` and
+their aggregate `judge_validation_summary.json` (the behavioural/crisis/refusal blocks
+in the same files are a different code path and unaffected); the P-D probe columns B/C
+(re-issued under Amendment 18); `stats_report.json` (t-vs-b3 harness rehearsal carrying
+the pre-Revision-2 judge map); `notebook/finding_guardrail_frontier.md` (frontier
+rehearsal on B0 responses, already not-reportable); the `--selfcheck`
+replacement-text-flag finding (dissolved: 0.925 to 0.051).
+
+**Archival (kept as history, annotated not rewritten):** preregistration.md Revisions
+1-2, Amendment 11's correction note, CLAUDE.md's superseded table (annotated today with
+the corrected values), lab-notebook and pending_* prose. These record what was believed
+when decisions were made; the amendments record why the beliefs changed.
+
+*Decided blind to arm-comparison results.* No arm scored with the pinned configuration,
+B3 never generated, the 60-item worksheet unlabelled, no Llama Guard response received.
