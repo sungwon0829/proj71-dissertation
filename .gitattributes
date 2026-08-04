@@ -21,6 +21,7 @@
 # also adding it here. A pinned file whose bytes are platform-dependent is not pinned.
 
 configs/judges_pinned.lock.json    -text
+configs/judges_pinned.lock.v2.json -text
 configs/behavioural_judge_prompt.txt -text
 configs/crisis_judge_prompt.txt    -text
 configs/refusal_judge_prompt.txt   -text

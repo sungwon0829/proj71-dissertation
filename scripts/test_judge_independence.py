@@ -33,6 +33,11 @@ from apply_b3_filter import assert_filter_is_not_an_asr_judge  # noqa: E402
 QWEN = "Qwen/Qwen2.5-7B-Instruct"
 BEAVER = "PKU-Alignment/beaver-dam-7b"
 BEAVER_REV = "3a5b70888869f04336d0d8344185ed74268ef896"
+# Amendment 19 granted branch (2026-08-05): Llama Guard 3 is the pinned B3 filter.
+# beaver-dam is diagnostic-only; the beaver-as-filter cases below exercise the guard's
+# LOGIC and are kept deliberately -- they are scenarios, not the pinned configuration.
+GUARD = "meta-llama/Llama-Guard-3-8B"
+GUARD_REV = "7327bd9f6efbbe6101dc6cc4736302b3cbb6e425"
 
 PASS, FAIL = [], []
 
@@ -78,10 +83,11 @@ def main() -> int:
 
     # --- 1. The real configuration must pass -----------------------------------------
     # If this fails, the pinned config itself is broken and nothing else matters.
+    # Since Amendment 20 the pinned filter is Llama Guard 3 (Amendment 19 granted branch).
     blk = check(
-        "1. pinned config (filter=beaver-dam, ASR judge=Qwen behavioural)",
+        "1. pinned config (filter=Llama-Guard-3-8B, ASR judge=Qwen behavioural)",
         lambda: judge_independence_block(
-            {"b3_filter_mechanism_id": f"{BEAVER}@{BEAVER_REV}", "pin_status": "PINNED"},
+            {"b3_filter_mechanism_id": f"{GUARD}@{GUARD_REV}", "pin_status": "PINNED"},
             pinned_jmeta()),
         should_raise=False)
     if blk is not None:
@@ -173,8 +179,22 @@ def main() -> int:
     check("9. apply_b3_filter refuses to BUILD when filter == ASR judge",
           lambda: assert_filter_is_not_an_asr_judge(b3cfg(QWEN, QWEN)),
           should_raise=True, must_mention=["independence"])
-    check("10. apply_b3_filter permits the pinned, non-colliding config",
+    check("10. apply_b3_filter permits a non-colliding classifier filter (guard logic)",
           lambda: assert_filter_is_not_an_asr_judge(b3cfg(BEAVER, QWEN)),
+          should_raise=False)
+
+    # --- 11. The new family obeys the same rule --------------------------------------
+    # Llama Guard as filter AND as a hypothetical ASR judge must collide exactly as any
+    # other mechanism would -- the rule is about mechanism identity, not model family.
+    jm11 = pinned_jmeta()
+    jm11["behavioural"] = jm(GUARD, "asr_judge")
+    check("11. Llama Guard as filter and as ASR judge -> collision",
+          lambda: judge_independence_block(
+              {"b3_filter_mechanism_id": f"{GUARD}@{GUARD_REV}", "pin_status": "PINNED"},
+              jm11),
+          should_raise=True, must_mention=["independence"])
+    check("12. apply_b3_filter permits the pinned Llama Guard config",
+          lambda: assert_filter_is_not_an_asr_judge(b3cfg(GUARD, QWEN)),
           should_raise=False)
 
     # --- report ------------------------------------------------------------------------
