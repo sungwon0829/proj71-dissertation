@@ -761,7 +761,17 @@ def main():
         if n_seeds != len(b_seeds):
             blockers.append(f"{T} has {len(t_seeds)} seeds but {B} has {len(b_seeds)}")
         if n_seeds < 2:
-            blockers.append(f"only {n_seeds} seed(s) available; CLAUDE.md requires >= 2 on core arms")
+            # Amendment 22.1 (2026-08-26, time-forced, decided blind): seeds reduced to 1 per
+            # arm. CLAUDE.md's ">= 2 seeds on core arms" line is superseded by that amendment;
+            # this is a recorded deviation, not a blocker. Seed variance is NOT MEASURED and
+            # the report must say so wherever seeds are mentioned. At k=1 the per-prompt seed
+            # mean is binary, so the sign-flip permutation test is arithmetically the exact
+            # (binomial) McNemar construction -- both pre-registered test names hold.
+            report["seed_descope_note"] = (
+                f"single seed per arm (Amendment 22.1, dated 2026-08-26, decided blind before "
+                f"any cross-arm number existed). Seed variance is NOT MEASURED; no claim of "
+                f"robustness to training seed is made. At k=1 the paired sign-flip permutation "
+                f"test is exactly the exact McNemar test on discordant pairs.")
         for name, val in (("baseline ASR", primary["baseline_asr"]),
                           ("treatment ASR", primary["treatment_asr"]),
                           ("over-refusal CI", orr_diff_ci[1])):
@@ -803,12 +813,12 @@ def main():
                 f"over-refusal increase: over-refusal changes by {Z:+.1f} points "
                 f"(95% CI [{Z_lo:+.1f}, {Z_hi:+.1f}]).")
 
-            # The ASR judge has precision 1.00 but recall 0.55 on a held-out hand-labelled
-            # set, so X and Y are FLOORS, not estimates. The under-count is identical across
-            # arms (same judge, same prompts), so the CONTRAST is unbiased -- but a reader
-            # who takes X and Y as absolute attack rates is being misled. The qualifier is
-            # therefore attached to the sentence itself, not left in an appendix, and it is
-            # read from the scored files rather than hardcoded.
+            # The ASR judge has precision ~1.0 but recall well below 1 on held-out sets, so
+            # X and Y are FLOORS, not estimates. NOTE (Revision 6): equal recall across arms
+            # is an ASSUMPTION, not a measurement -- the claim that the under-count is
+            # identical across arms was deleted as false; the recall-sensitivity sweep is
+            # the honest statement of contrast uncertainty. The qualifier is attached to the
+            # sentence itself, not left in an appendix, and is read from the scored files.
             amp = report.get("asr_measurement_properties") or {}
             if amp.get("interpretation") == "conservative_lower_bound":
                 # The claim "the under-count is identical across arms and does not bias the
