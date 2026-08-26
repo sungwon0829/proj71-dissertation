@@ -1003,6 +1003,46 @@ def verify_judge_pin(cfg, cfg_path: Path) -> dict:
     else:
         status["preregistration_revisions_in_force"] = "preregistration.md NOT FOUND"
 
+    # Amendments carry the same staleness contract as revisions (Amendment 21): the lock
+    # names the FULL protocol it was issued under, and a pin that predates an amendment is
+    # a stale provenance record. Amendment headings live in two places: `## Amendment N`
+    # in preregistration_amendments.md, and the `**AMENDMENT 7a` block in
+    # preregistration.md. Sub-corrections (14a/14b/14c) are `###` subsections of their
+    # parent amendment and are deliberately not enumerated separately; 18a has its own
+    # `##` heading and is.
+    def _amend_key(s):
+        return (int(re.match(r"\d+", s).group()), s)
+    found_amends = set()
+    if prereg.is_file():
+        found_amends |= {m.lower() for m in
+                         re.findall(r"\*\*AMENDMENT\s+(\d+[a-z]?)\s",
+                                    prereg.read_text(encoding="utf-8"))}
+    amend_file = resolve("notebook/preregistration_amendments.md")
+    if amend_file.is_file():
+        found_amends |= {m.lower() for m in
+                         re.findall(r"(?m)^##\s+Amendment\s+(\d+[a-z]?)\b",
+                                    amend_file.read_text(encoding="utf-8"))}
+    if "preregistration_amendments_in_force" in lock:
+        actual_amends = sorted(found_amends, key=_amend_key)
+        claimed_amends = sorted((str(a).lower() for a in
+                                 lock["preregistration_amendments_in_force"]), key=_amend_key)
+        if claimed_amends != actual_amends:
+            missing_from_lock = sorted(set(actual_amends) - set(claimed_amends), key=_amend_key)
+            raise RuntimeError(
+                f"STALE PIN PROVENANCE: {lock_path.name} declares pre-registration amendments "
+                f"{claimed_amends}, but the pre-registration files contain {actual_amends}"
+                + (f" (not recorded in the lock: {missing_from_lock})" if missing_from_lock else "")
+                + ". An amendment was added without re-pinning. Confirm the pinned instruments "
+                  "are still correct under the new amendment and re-pin (Amendment 14a path). "
+                  "Refusing to score.")
+        status["preregistration_amendments_in_force"] = actual_amends
+    elif found_amends:
+        # pre-v3 locks predate this check; recorded, not fatal, so historical locks can
+        # still be verified against their own era.
+        status["preregistration_amendments_in_force"] = (
+            "NOT COVERED BY THIS LOCK (pre-v3): amendments present in the record: "
+            + ", ".join(sorted(found_amends, key=_amend_key)))
+
     mismatches, missing = [], []
     for name, pin in lock["judges"].items():
         p = resolve(pin["prompt_file"])
@@ -1053,6 +1093,28 @@ def verify_judge_pin(cfg, cfg_path: Path) -> dict:
                 f"JUDGE PIN VIOLATED: the B3 filter is "
                 f"{fb['name_or_path']}@{fb.get('revision')} at threshold {fcfg['threshold']}, "
                 f"pinned as {fpin['model']}@{fpin['revision']} at {fpin['threshold']}.")
+
+    # Helpfulness scorer (Amendment 21, closing the Amendment 17 audit gap): it has no
+    # prompt to hash, so the lock pins model + revision and drift is a hard failure.
+    hpin = lock.get("helpfulness_scorer")
+    hcfg = cfg.get("helpfulness") or {}
+    if hpin:
+        if not hcfg:
+            raise RuntimeError(
+                "JUDGE PIN VIOLATED: the lock pins a helpfulness scorer "
+                f"({hpin['model']}@{hpin['revision']}) but judges.yaml has no `helpfulness` "
+                "block. A pinned instrument cannot silently disappear.")
+        if (hcfg.get("name_or_path") != hpin["model"]
+                or hcfg.get("revision") != hpin["revision"]):
+            raise RuntimeError(
+                f"JUDGE PIN VIOLATED: the helpfulness scorer is "
+                f"{hcfg.get('name_or_path')}@{hcfg.get('revision')}, pinned as "
+                f"{hpin['model']}@{hpin['revision']}.")
+        status["helpfulness_scorer_verified"] = {"model": hpin["model"],
+                                                 "revision": hpin["revision"]}
+    else:
+        status["helpfulness_scorer_verified"] = (
+            "NOT COVERED BY THIS LOCK (pre-v3; Amendment 17 flagged this gap)")
 
     status.update({
         "status": "VERIFIED",

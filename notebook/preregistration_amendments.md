@@ -880,3 +880,151 @@ would choose, and it was chosen by Meta's calendar, not by us.
 *Decided blind to arm-comparison results.* No arm has been scored with the pinned
 configuration; B3 has never been generated; the probe above is diagnostic under
 Amendment 17 terms and enters no table.
+
+---
+
+## Amendment 21 — Record-correction re-pin (lock v3): stale filter identity, helpfulness scorer into the hash chain, amendments-in-force enumeration
+
+**Dated 2026-08-26.** No instrument changes: every judge pin and the B3 filter block are
+carried into the v3 lock byte-for-byte from v2. This amendment corrects the *record* of
+the architecture, via the legitimate re-pin path Amendment 14a sanctions. The v1 and v2
+locks are retained unedited; their hashes are verified after the operation.
+
+### The defect being corrected
+
+Amendment 20 installed `meta-llama/Llama-Guard-3-8B@7327bd9f…` as the B3 filter, but
+three artefacts kept naming beaver-dam as the filter:
+
+1. `configs/judges.yaml`'s top-level `b3_filter_mechanism_id` — the key
+   `check_judge_independence()` actually reads — still held
+   `PKU-Alignment/beaver-dam-7b@3a5b7088…`.
+2. The v2 lock's `independence_statement` prose still described beaver-dam as the filter
+   (carried over verbatim from v1).
+3. The comment header above the `llama_guard` backend block in `judges.yaml` still read
+   "BeaverTails QA-moderation classifier (ASR judge)".
+
+**Measured consequence, stated honestly:** the human-κ report generated 2026-08-26
+(`human_asr_kappa_report_20260826_231917.json`) records
+`b3_filter_mechanism_id: PKU-Alignment/beaver-dam-7b@…` in its `judge_independence`
+block. Independence held **in substance** in every configuration — no Qwen judge shares
+a mechanism with either filter family, and `test_judge_independence.py` passes 15/15 —
+but the recorded assertion misidentified the installed filter. The κ numbers themselves
+are unaffected: the independence block is provenance metadata, not an input to the
+agreement computation. No B3 artefact was ever produced under the stale record.
+
+### What the v3 lock changes (and what it does not)
+
+- `independence_statement` rewritten to name the installed filter (Llama-Guard-3-8B) and
+  the actual independence argument (Llama-family filter vs Qwen-family judges).
+- **Helpfulness scorer enters the verification chain**, closing the audit gap flagged in
+  Amendment 17 and deferred "to the next legitimate re-pin" — a deferral that was then
+  missed at the Amendment 20 re-pin and is honoured now. The lock pins
+  `Psychotherapy-LLM/PsychoCounsel-Llama3-8B-Reward@edab9eae…`; `verify_judge_pin()`
+  hard-fails if `judges.yaml`'s helpfulness block drifts from it. It has no prompt to
+  hash; model + revision are what a reader needs to verify.
+- **The full protocol in force is enumerated**: `preregistration_revisions_in_force`
+  (1–7, unchanged) plus a new `preregistration_amendments_in_force` (7a, 8–22 including
+  18a). `verify_judge_pin()` now scans both pre-registration files and refuses to score
+  if an amendment exists that the lock does not name — the Amendment 13 failure class
+  (a protocol change that never propagated into the commitment record) is now
+  machine-checked instead of relying on a drafter noticing.
+- `judges.yaml`: `pin_lock_file`/`pin_lock_sha256` → v3; top-level
+  `b3_filter_mechanism_id` → the Llama Guard mechanism id; the two stale comment blocks
+  corrected (comments only; the `b3_filter` block itself was already correct).
+- `run_metadata.multi_seed_arms` updated to the Amendment 22 descope (1 seed per arm),
+  with the original 2026-08-01 enumeration retained inside it as history. The stale
+  `KNOWN INCONSISTENCY` note (already superseded by Amendment 14a) is replaced by a
+  pointer to that supersession rather than repeated.
+
+**Not changed:** the three judge prompt pins (byte-identical SHA-256s), the B3 filter
+block (model, revision, template hash, threshold, flag rule), the pin date (2026-08-01
+for the judges, 2026-08-05 for the filter), the replacement text, every decision rule.
+
+*Decided blind to arm-comparison results.* No arm has been scored with the pinned
+configuration; B3 has never been generated; T seed 1 has no generations. The only new
+measurement since Amendment 20 is the owner's 60-item human κ (2026-08-26), which
+measures the ASR judge against human labels on b0/b1 responses and contains no
+cross-arm comparison.
+
+---
+
+## Amendment 22 — Time-forced descope, 8 days from submission
+
+**Dated 2026-08-26.** The 21 Aug results lock was missed: between 2026-08-05 and
+2026-08-26 the only project activity was the owner's labelling of the 60-item ASR
+worksheet (completed 2026-08-26; κ report TRUSTWORTHY). Submission is 2026-09-03, hard.
+This amendment records the descope decided to fit the remaining eight days. Every item
+below is forced by the calendar, not by any result: **as of this amendment T seed 1 has
+zero evaluation output, B3 has never been generated, and no cross-arm number of any
+kind exists** (verifiable from the file system). CLAUDE.md's descoping order permits
+(1) shrinking the judge-calibration subset and (4) reducing seeds; its "never cut" list
+(B3 baseline, over-refusal metric, frozen suite, Table 2) is untouched. The one
+"never cut" item this amendment does touch — "≥2 seeds on core arms" — is cut openly
+here, with the statistical consequence stated, because the alternative under the time
+constraint is no completed evaluation at all.
+
+### 22.1 Seeds: 1 per arm (B2, B3, T)
+
+B2 and T run at seed 1 only; B3 is derived from B2 seed 1. **Justification:** the
+primary test operates over paired prompts — n=180 primary, crisis co-primary n=60
+(Amendment 13) — not over seeds; seed variance was always the secondary robustness
+check, never the primary n. **Consequences, stated in Methods and Limitations:**
+(a) seed variance is reported as **not measured**, and no claim of robustness to
+training seed is made; (b) Table 1 carries single-run values for every arm, with no
+across-seed CI (bootstrap CIs over the prompt set remain); (c) the pre-registered
+"mean ± 95% CI over seeds" presentation for B2/B3/T is withdrawn.
+
+**Statistical-test reconciliation, so Amendment 13 is not silently contradicted:** with
+one seed the per-prompt difference is binary, and the two-sided paired sign-flip
+permutation test on binary paired differences is arithmetically the exact (binomial)
+McNemar construction — zeros are flip-invariant and drop out, and the flip distribution
+over discordant pairs is Binomial(b+c, ½). At k=1 seed the two pre-registered names
+denote the same computation. `stats.py`'s primary path is unchanged; the per-seed
+McNemar robustness table collapses into the primary rather than disappearing.
+
+### 22.2 T_ctrl: conditional
+
+T_ctrl (Revision 5) is trained **only if** the stats-and-tables phase (Tables 1–2 and
+the primary test) is complete by **30 Aug 2026**. Otherwise it is reported as **not
+run**, and the consequence is stated in the Discussion rather than softened: without
+T_ctrl, a T advantage cannot be attributed to preference *direction* as opposed to the
+mere addition of out-of-domain preference data, and the claim wording must carry that
+unresolved confound explicitly. The condition is calendar-based and verifiable, fixed
+before any T-vs-B3 number exists.
+
+### 22.3 ASR human-validation extension: descoped
+
+The ~120-item extension (Amendment 10) is not built. The completed 60-item pass stands
+as the judge validation: κ = 0.668 [0.453, 0.851] on the 54 non-gold items, gold check
+6/6, intra-rater agreement 10/10, stamp TRUSTWORTHY
+(`human_asr_kappa_report_20260826_231917.json`). **Consequences, stated rather than
+discovered later:**
+
+- The 60-item set is below CLAUDE.md safeguard 4's 100–150 range and is reported as
+  such, per Amendment 10's own stated limitation.
+- The set covers b0/b1 responses only, so **per-arm recall for the DPO arms (B2, B3, T)
+  is unavailable**, and therefore **the Revision 6 attenuation correction is reported
+  as NOT APPLIED**, with this reason. The primary reported effect is the **raw observed
+  effect**. The recall-sensitivity sweep (`notebook/power_analysis.md`) is reported in
+  its place, so a reader can see the true-scale implication under assumed recalls; the
+  pooled human-anchored recall measured on b0/b1 (0.793, today's report; vs 0.55
+  inter-model on heldout3) is stated as the best available anchor while noting it is
+  not arm-matched. The pre-registered 10-point TRUE-scale threshold consequently cannot
+  be evaluated as a point claim; it is evaluated as a range across the sensitivity
+  sweep, and the paper says exactly that.
+- Amendment 16's abandonment tally and per-category κ spread (prefilling 0.886,
+  many_shot 0.478, persona 0.357 — the weakest, with both over- and under-flagging)
+  are reported from the 60-item pass.
+
+### 22.4 Human-labelling priority: over-refusal first
+
+The owner's remaining labelling budget goes to the **over-refusal labels** (Revision 4:
+B3 seed 1 + T seed 1, 60 benign items each, plus the ~20-item second-seed spot-check —
+which under 22.1 is dropped with the second seed itself). Over-refusal is the primary
+measure for Table 1's over-refusal column and `is_paper_number` is forced false without
+it; it is the binding human constraint on the paper and is scheduled ahead of everything
+else that needs the owner.
+
+*Decided blind to arm-comparison results.* No arm scored with the pinned configuration,
+B3 never generated, T seed 1 without generations, no Llama Guard verdict on any T or B3
+output exists.
