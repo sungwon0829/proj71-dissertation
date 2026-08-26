@@ -35,3 +35,4 @@ data/redteam/*.jsonl               -text
 data/redteam/*.md                  -text
 data/redteam/FROZEN.txt            -text
 configs/judges_pinned.lock.v3.json -text
+configs/judges_pinned.lock.v4.json -text

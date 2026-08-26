@@ -1035,3 +1035,82 @@ output exists.
 > blindness claim is unaffected and is proven by commit ordering, not by the date
 > label: `d957405` precedes every cross-arm artefact (first B3 derivation 00:39, first
 > scoring 00:47, stats 01:17+).
+
+---
+
+## Amendment 23 — Seeds 2–3 reinstated as a post-hoc robustness check; the primary analysis stays seed 1
+
+**Dated 2026-08-27, before any seed-2/3 training step exists.** Partially reverses
+Amendment 22.1: B2 and T are trained at seeds 2 and 3 (B3 derived from each B2 seed by
+`apply_b3_filter.py`, as always), launched tonight on otherwise-idle GPU time. Configs are
+byte-identical to seed 1 (`configs/dpo_b2.yaml`, `configs/dpo_t.yaml`); only `--seed`
+differs.
+
+**This is the first amendment in this file that is NOT decided blind, and it says so
+plainly rather than hoping the reader does not check.** At the time of this decision the
+seed-1 cross-arm results exist and have been seen: T vs B3 primary **−5.56 points
+(45.00% → 39.44%), 95% bootstrap CI [−13.89, +2.78], p = 0.227** (two-sided sign-flip
+permutation ≡ exact McNemar at k = 1); crisis co-primary −6.67 points (36.67% → 30.00%),
+CI [−20.00, +6.67], p = 0.484 (`results/stats_report_realsuite.json`). Amendment 22's
+descope was decided blind; this reversal is not, and the two must not be conflated.
+
+**Justification (one line):** the motivation is robustness evidence — Amendment 22.1 left
+seed variance "reported as not measured", the GPU is idle for the nights remaining before
+submission, and the runs consume no owner-labelling time and displace nothing on the
+critical path.
+
+### What being sighted obliges — the protections, fixed before launch
+
+Blindness cannot protect this decision, so the following do instead:
+
+1. **The pre-registered primary analysis remains seed 1, exactly as specified.**
+   Amendment 13's test and n (180 primary; crisis co-primary 60, never pooled), the
+   Amendment 22.3 raw observed effect, and the Revision 4 human over-refusal labels. The
+   headline sentence, Table 1's primary values, and the 10-point pre-registered threshold
+   evaluation are computed from seed 1 only and are reported as such **regardless of what
+   seeds 2–3 show**. The additional seeds are not a new primary test and cannot become
+   one.
+2. **Seeds 2–3 are a clearly-labelled post-hoc robustness check.** They enter a separate,
+   explicitly post-hoc Results panel: per-seed ASR (primary n=180), crisis co-primary,
+   over-refusal (judge cross-check only — see limitations), helpfulness, and per-seed
+   exact McNemar in the robustness role Amendment 13 assigned it. No pooled-seed or
+   seed-mean quantity is promoted to primary; any pooled figure computed is labelled
+   post-hoc exploratory.
+3. **Pre-commitment to report whatever they show** — including seeds that disagree in
+   sign with seed 1, shrink the effect, or erase it. Disagreement is reported as
+   disagreement, in Results, not in a footnote. This commitment is made now, before the
+   first seed-2/3 training step has been launched; the commit carrying this amendment
+   precedes every seed-2/3 artefact (the Amendment 22 commit-ordering proof pattern
+   applies).
+4. **Completion honesty:** a run that fails or does not finish in time is reported as
+   attempted-and-incomplete, and whatever subset completed is reported. Completion is
+   determined by the calendar and the machine, never by the values produced. No seed is
+   relaunched because of the number it produced (Amendment 12's defect-only relaunch rule
+   applies to these runs).
+
+### Known limitations of the check, fixed now
+
+- **Over-refusal:** the Revision 4 human labels cover seed-1 B3/T responses only. For
+  seeds 2–3 the over-refusal column is the judge cross-check alone (κ = 0.074, stated
+  wherever shown). The Amendment 22.4 ~20-item second-seed spot-check remains available
+  to the owner but is not assumed.
+- **Scale:** k = 3 seeds supports a spread statement, not a seed-level significance
+  claim; none will be made.
+
+### Record consequences
+
+- **Lock v4** is issued under the Amendment 14a/21 legitimate re-pin path **before any
+  seed-2/3 artefact is scored**: instruments byte-identical (judges, filter and
+  helpfulness blocks deep-equal to v3, asserted at issuance);
+  `preregistration_amendments_in_force` gains "23"; `run_metadata` keeps the primary
+  seeds unchanged (B2/B3/T = [1]) and adds `posthoc_robustness_seeds`
+  (B2/B3/T = [2, 3]) citing this amendment. v1/v2/v3 are retained unedited. Without this
+  re-pin, `verify_judge_pin()`'s amendment-staleness scan correctly refuses to score
+  anything the moment this amendment exists; that refusal is verified to fire before v4
+  is issued, as the guard's positive control.
+- Amendment 22.1's "seed variance not measured" limitation is superseded by the measured
+  spread where the runs complete; Methods states the primary/post-hoc split explicitly.
+- T_ctrl is untouched: Amendment 22.2's calendar condition still governs it.
+
+*Sighted decision, protections enumerated above; motivation is robustness evidence;
+reversal of Amendment 22.1 noted.*
