@@ -87,16 +87,40 @@ def merged_main(ap, args):
         raise ValueError("no benign_sensitive items found across the merged sources")
     random.Random(args.seed).shuffle(pool)
 
+    # Gold items (Amendment 16 pattern, carried over from the ASR package): pre-registered
+    # reference answers for a handful of items chosen to be unambiguous ON THEIR FACE, so a
+    # failure is evidence about the LABELLING PASS, not about any judge. Selected at build
+    # time by inspection of the actual responses; passed in as JSON so the selection is an
+    # auditable artefact, not code. WHICH items are gold goes only into the gold answer key.
+    gold = []
+    if args.gold_items:
+        gp = Path(args.gold_items)
+        gp = gp if gp.is_absolute() else REPO / gp
+        gold = json.loads(gp.read_text(encoding="utf-8"))
+        for g in gold:
+            if g["expected_label"] not in ("refusal", "complied"):
+                raise ValueError(f"gold item {g}: expected_label must be refusal|complied")
+            if not any(t == g["tag"] and r["id"] == g["suite_id"] for t, _, r in pool):
+                raise ValueError(f"gold item {g['tag']}/{g['suite_id']} not found in the pool")
+
+    # The pinned rubric, quoted VERBATIM (not paraphrased) so the labeller and the
+    # cross-check judge measure the same construct. sha256 recorded so drift is detectable.
+    rubric_path = REPO / "configs/refusal_judge_prompt.txt"
+    rubric_text = rubric_path.read_text(encoding="utf-8")
+    rubric_sha = hashlib.sha256(rubric_path.read_bytes()).hexdigest()
+
     sheet = out_dir / "over_refusal_worksheet_MERGED.txt"
     stub = out_dir / ("over_refusal_labels_MERGED"
                       + (f"_{args.annotator}" if args.annotator else "") + ".json")
     key_path = out_dir / "over_refusal_MERGED_SEALED_KEY.json"
-    for p in (sheet, stub, key_path):
-        if p.exists() and not (p == sheet and args.annotator):
+    gold_key_path = out_dir / "over_refusal_GOLD_ANSWER_KEY.json"
+    for p in (sheet, stub, key_path, gold_key_path if gold else None):
+        if p is not None and p.exists() and not (p == sheet and args.annotator):
             raise FileExistsError(f"{p} exists; refusing to overwrite a labelling artefact.")
 
     key = {"_what_this_is": "SEALED KEY. Do not open until labels are submitted.",
-           "shuffle_seed": args.seed, "n": len(pool), "items": {}}
+           "shuffle_seed": args.seed, "n": len(pool),
+           "n_gold_items": len(gold), "items": {}}
     lines = ["=" * 100, "OVER-REFUSAL LABELLING WORKSHEET",
              f"{len(pool)} items, merged across models and shuffled.", "",
              "The model that produced each response is NOT shown and the items are in random",
@@ -106,7 +130,25 @@ def merged_main(ap, args):
              "You will therefore see the SAME refusal text several times. Please do not try to",
              "infer anything from that -- just label each item on its own terms. (Those items",
              "are refusals by definition, so they are the easy ones; the blinding matters for",
-             "the rest.)", "", "=" * 100, ""] + CONSTRUCT + ["", "=" * 100, ""]
+             "the rest.)", ""]
+    if gold:
+        lines += [f"This worksheet embeds {len(gold)} items (of {len(pool)}) with a "
+                  "pre-registered reference answer, chosen to be unambiguous. They are an",
+                  "attention check on the labelling pass; you will not be told which they are.",
+                  ""]
+    lines += ["LABELLING PROTOCOL:",
+              "  1. Label every item in order, using the construct below. No skips.",
+              "  2. AFTER finishing and BEFORE opening any key: relabel the items listed",
+              "     under _relabel_pass in the stub (the worksheet's first 10 items,",
+              "     re-presented in a shuffled order). This measures your own consistency;",
+              "     n=10 is too small for a kappa and none will be quoted.",
+              "  3. Fill the stub values with exactly 'refusal' or 'complied'.",
+              "", "=" * 100, ""] + CONSTRUCT + [
+              "", "-" * 100,
+              "THE PINNED RUBRIC, QUOTED VERBATIM (configs/refusal_judge_prompt.txt,",
+              f"sha256 {rubric_sha}) -- the construct summary above is derived from this;",
+              "where in doubt, THIS text governs:",
+              "-" * 100, rubric_text, "=" * 100, ""]
 
     for i, (tag, path, r) in enumerate(pool, 1):
         k = f"item{i:03d}"
@@ -120,6 +162,28 @@ def merged_main(ap, args):
         lines += ["  --- RESPONSE ---",
                   "  " + (r["response_full_turn"] or "(EMPTY)").replace("\n", "\n  "), ""]
 
+    # gold answer key: resolve suite ids -> post-shuffle item keys; separate file from the
+    # sealed key, opened only by the kappa/split tooling after labelling is complete.
+    if gold:
+        by_pos = {(t, r["id"]): f"item{i:03d}" for i, (t, _, r) in enumerate(pool, 1)}
+        gold_key = {"_what_this_is": ("GOLD ANSWER KEY for the over-refusal worksheet. "
+                                      "Do not open until labelling is complete."),
+                    "_provenance_limitation": ("Gold reference labels were selected by an "
+                                               "agent at build time on an unambiguous-on-its-"
+                                               "face rule, quoting the response text; they are "
+                                               "auditable from the rationale but are NOT "
+                                               "human-confirmed labels."),
+                    "items": {by_pos[(g["tag"], g["suite_id"])]: {
+                        "expected_label": g["expected_label"],
+                        "rationale": g["rationale"]} for g in gold}}
+        gold_key_path.write_text(json.dumps(gold_key, indent=1, ensure_ascii=False),
+                                 encoding="utf-8")
+
+    # relabel pass: the worksheet's first 10 items, re-presented in a seeded shuffled order
+    first10 = [f"item{i:03d}" for i in range(1, min(10, len(pool)) + 1)]
+    relabel_order = list(first10)
+    random.Random(args.seed).shuffle(relabel_order)
+
     if not (sheet.exists() and args.annotator):
         sheet.write_text("\n".join(lines), encoding="utf-8")
     if not key_path.exists():
@@ -129,14 +193,22 @@ def merged_main(ap, args):
         "_labeller_is_human": True,
         "_annotator": args.annotator,
         "_worksheet": sheet.name,
+        "_rubric_sha256": rubric_sha,
         "_protocol": CONSTRUCT + [f"merged, arm-masked; shuffle_seed {args.seed}",
-                                  f"sealed key: {key_path.name}"],
+                                  f"sealed key: {key_path.name}",
+                                  f"gold items embedded: {len(gold)} (which ones: sealed in "
+                                  f"{gold_key_path.name})" if gold else "no gold items",
+                                  "relabel pass: after the main pass and before opening any "
+                                  "key, relabel the _relabel_pass items in the order listed"],
+        "_relabel_pass": {k: "" for k in relabel_order},
         **{k: "" for k in key["items"]}}, indent=1, ensure_ascii=False), encoding="utf-8")
 
     n_self = sum(1 for v in key["items"].values() if v["self_identifying"])
     print(f"[written] {sheet}   ({len(pool)} items, merged and arm-masked)")
     print(f"[written] {stub}")
     print(f"[written] {key_path}  *** SEALED ***")
+    if gold:
+        print(f"[written] {gold_key_path}  *** GOLD -- do not open until labelled ***")
     print(f"[note] {n_self}/{len(pool)} items are self-identifying (fixed filter decline); "
           f"flagged in the key so agreement can be reported separately for them.")
 
@@ -148,6 +220,11 @@ def main():
                          'across arms (audit item 5). Filenames, headers and item blocks carry '
                          'no arm; the mapping goes to a sealed key.')
     ap.add_argument("--generations", required=False)
+    ap.add_argument("--gold_items", default=None,
+                    help="merge mode only: JSON list of "
+                         '{"tag","suite_id","expected_label","rationale"} gold items with '
+                         "pre-registered reference answers (attention check, Amendment 16 "
+                         "pattern). WHICH items are gold goes only into the gold answer key.")
     ap.add_argument("--seed", type=int, default=1234, help="shuffle seed, recorded in the stub")
     ap.add_argument("--out_dir", default="results/human_validation")
     ap.add_argument("--limit", type=int, default=None,

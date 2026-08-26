@@ -1276,16 +1276,16 @@ def helpfulness_available(hcfg) -> tuple:
     return True, str(snaps[0])
 
 
-def score_helpfulness(hcfg, recs, system_text):
+def load_helpfulness_model(hcfg):
+    """Load the pinned reward model + tokenizer exactly as production scoring uses them.
+
+    Shared between score_helpfulness() and scripts/test_reward_model_acceptance.py so the
+    acceptance test certifies THIS path, not a parallel reimplementation (the beaver-dam
+    EOS defect was invisible to every within-path diagnostic; one code path is the fix).
+    """
     ok, info = helpfulness_available(hcfg)
     if not ok:
-        print("\n" + "!" * 88)
-        print("!! HELPFULNESS NOT SCORED")
-        print("!! " + info)
-        print("!" * 88 + "\n")
-        return None, {"available": False, "reason": info,
-                      "model": hcfg["name_or_path"], "scored_n": 0}
-    print(f"[helpfulness] loading {hcfg['name_or_path']} from {info}")
+        return None, None, info
     from transformers import AutoModelForSequenceClassification
     tok = AutoTokenizer.from_pretrained(hcfg["name_or_path"], cache_dir=hcfg["cache_dir"],
                                         revision=hcfg.get("revision"))
@@ -1300,6 +1300,33 @@ def score_helpfulness(hcfg, recs, system_text):
     ).to("cuda").eval()
     if model.config.pad_token_id is None:
         model.config.pad_token_id = tok.pad_token_id
+    return tok, model, info
+
+
+def helpfulness_score_convs(tok, model, convs, hcfg) -> list:
+    """Score a batch of full conversations (each a list of chat messages ending in the
+    assistant response under evaluation). Returns one float per conversation. This is the
+    single scoring path for the reward model."""
+    texts = [tok.apply_chat_template(c, tokenize=False) for c in convs]
+    enc = tok(texts, return_tensors="pt", padding=True, truncation=True,
+              max_length=int(hcfg["max_length"]), add_special_tokens=False).to("cuda")
+    with torch.no_grad():
+        logits = model(**enc).logits.float().squeeze(-1).cpu()
+    if logits.dim() == 0:
+        logits = logits.unsqueeze(0)
+    return [float(v) for v in logits.tolist()]
+
+
+def score_helpfulness(hcfg, recs, system_text):
+    tok, model, info = load_helpfulness_model(hcfg)
+    if model is None:
+        print("\n" + "!" * 88)
+        print("!! HELPFULNESS NOT SCORED")
+        print("!! " + info)
+        print("!" * 88 + "\n")
+        return None, {"available": False, "reason": info,
+                      "model": hcfg["name_or_path"], "scored_n": 0}
+    print(f"[helpfulness] loading {hcfg['name_or_path']} from {info}")
     cats = set(hcfg["score_on_categories"])
     targets = [r for r in recs if r["category"] in cats]
     scores = {}
@@ -1314,12 +1341,7 @@ def score_helpfulness(hcfg, recs, system_text):
                                  # turn (prefill + continuation) is appended as the response
             convs.append([{"role": "system", "content": system_text}] + ctx
                          + [{"role": "assistant", "content": r["response_full_turn"]}])
-        texts = [tok.apply_chat_template(c, tokenize=False) for c in convs]
-        enc = tok(texts, return_tensors="pt", padding=True, truncation=True,
-                  max_length=int(hcfg["max_length"]), add_special_tokens=False).to("cuda")
-        with torch.no_grad():
-            logits = model(**enc).logits.float().squeeze(-1).cpu()
-        for r, v in zip(chunk, logits.tolist()):
+        for r, v in zip(chunk, helpfulness_score_convs(tok, model, convs, hcfg)):
             scores[r["id"]] = float(v)
         print(f"  [helpfulness] {min(s + bs, len(targets))}/{len(targets)}")
     del model
