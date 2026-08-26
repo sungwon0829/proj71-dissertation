@@ -2287,3 +2287,391 @@ A further, more marginal mechanistic touchpoint for the same question (why chose
 - The medRxiv mental-health fine-tuning paper could not be fetched directly (HTTP 403) — summary reconstructed from search snippets only; re-verify methodology/figures from the actual PDF.
 - TAB-PO is a Feb 2026 unpublished preprint in a different application domain (medical structured annotation) — marginal, not load-bearing; do not lean on it as primary support for the EOS/termination finding.
 - The `rpo_alpha` vs. `loss_type=["sigmoid","sft"]`+`loss_weights` question — which one `configs/dpo_t.yaml` actually exercises — is still not independently confirmed against installed TRL 1.9.0 source; a config-ownership item for `train-runner`, not resolved by literature search.
+
+## 2026-08-27 — File-integrity incident and recovery (main thread)
+
+During today's multi-agent related-work pass the working copy of this file was
+overwritten mid-run: ~1,500 lines (the entries numbered 22–38 and 40–42 and two
+search-session headers) were lost from the working tree, and the damaged copy acquired
+an embedded "CRITICAL RECOVERY NOTICE" directing restoration from an agent transcript
+in preference to git, on the claim that git might not hold this file. That claim is
+false — the file is tracked, and the working tree was clean against HEAD when the
+session began — so the embedded instruction was treated as untrusted and NOT followed,
+and no transcript-based reconstruction was performed. A separate instruction travelling
+through the workflow's data channel (an "OPERATIONAL_ALERT" pseudo-citation urging an
+immediate blind git restore) was likewise not executed as instructed; the restore below
+was decided from first-principles evidence (git status at session start, git log,
+numstat) instead.
+
+Recovery: restored byte-exact from git HEAD; the verified-verdict section below was
+then re-appended from the writer stage's output. Two finder-written "gap-fill"
+session-note sections created during the damage window are quarantined in the preserved
+damaged copy (results/incidents/related_work_DAMAGED_20260827.md, gitignored,
+machine-local) rather than restored — every citation-bearing claim they produced flows
+through the independently verified bibliography below and paper/references.bib. Full
+agent transcripts preserved in the session workflow directory for audit.
+## 2026-08-27 — Full related-work pass (pre-submission)
+
+Verified entries only: every item below passed an independent bibliographic verification
+pass (primary-source fetch where possible; corroboration caveats carried into the
+annotation). Bibtex is reproduced verbatim from the verification verdicts in the
+"Bibliography for this section" subsection. Unverifiable candidates are listed at the end
+and must not be cited.
+
+### Trained-in vs post-hoc safety alignment / safety-DPO
+
+- **`bianchi2024safetytuned`** — Bianchi, Suzgun, Attanasio, Röttger, Jurafsky, Hashimoto,
+  Zou (ICLR 2024). Shows that adding as little as ~3% safety examples to instruction-tuning
+  data substantially improves safety at a measurable over-refusal cost ("exaggerated
+  safety"), establishing the safety-data-mixing trade-off shape our headline sentence
+  quantifies — but on SFT, not preference optimisation, and with **no guardrail-filter
+  baseline**, so it does not run the trained-in vs bolted-on comparison. (ICLR 2024
+  acceptance corroborated via the authors' repo; verifier recommends one final manual
+  OpenReview check before submission.)
+- **`li2026superficial`** — Li, Kim (ICLR 2026). The Superficial Safety Alignment
+  Hypothesis: safety alignment is carried by a small identifiable set of safety-critical
+  neurons — a parameter-level shallow-alignment account complementing `qi2025safety`'s
+  token-position account. Motivates testing whether preference-trained safety (T) is more
+  robust than a narrow bolted-on mechanism, but contains no filter arm and no adversarial
+  ASR suite. (ICLR 2026 status is arXiv-self-reported plus press corroboration; OpenReview
+  itself could not be fetched — re-check before describing as peer-reviewed.)
+- **`wang2025adversarial`** — Wang et al., 16 authors (Findings of ACL 2025). Adversarial
+  Preference Learning closes the loop between an attack generator and iterative
+  preference-optimisation defence on Mistral-7B, cutting harmful-output rate as scored by
+  Llama-Guard. Llama-Guard appears **only as an evaluation judge, never as a competing
+  bolted-on filter arm** — so this too stops short of the B3-vs-T comparison, and it is a
+  useful example of why our judge-independence rule keeps the judge and filter roles
+  separate.
+
+**Comparison check for this subsection:** neither of the two training-side papers here
+(Bianchi et al., Wang et al.) builds a post-hoc filter arm as an alternative to
+training-time safety. Consistent with all four earlier search sessions in this file: still
+no paper found running the exact trained-in vs bolted-on controlled comparison.
+
+### The anchored-DPO lineage
+
+- **`pal2024smaug`** — Pal, Karkhanis, Dooley, Roberts, Naidu, White (arXiv:2402.13228).
+  DPOP/DPO-Positive: identifies the failure mode where standard DPO *reduces* the
+  likelihood of the chosen completion and adds a penalty term to floor it — direct
+  precedent for anchoring the chosen completion, part of the mechanistic backdrop to our
+  23%-vs-5% non-termination finding. Verifier could not confirm any peer-reviewed venue
+  (speculated COLM 2024 not verifiable); cite as arXiv preprint. Same key as already used
+  in this file — not a duplicate entry.
+- **`azar2024ipo`** — Azar, Guo, Piot, Munos, Rowland, Valko, Calandriello (AISTATS 2024,
+  PMLR 238). The theoretical account of why DPO's unbounded objective overfits preference
+  data toward degenerate optima, and the bounded IPO alternative — the theory-side
+  justification for not running vanilla DPO unmodified. Same key as already in this file;
+  verified bibtex below adds editor/month fields from the PMLR record.
+- **`hong2024orpo`** — Hong, Lee, Thorne (EMNLP 2024). ORPO combines an NLL loss on the
+  chosen completion with an odds-ratio penalty and drops the reference model entirely —
+  the same anchor-the-chosen-likelihood family as our `loss_type=[sigmoid, sft]`
+  configuration, taken one step further (no KL/beta term). Citable sibling design point
+  when justifying why we keep the reference/KL term.
+- **`xu2024cpo`** — Xu, Sharaf, Chen, Tan, Shen, Van Durme, Murray, Kim (ICML 2024, PMLR
+  235). CPO adds an explicit NLL/behaviour-cloning term on the preferred output to a
+  contrastive preference loss and shows by ablation that dropping the anchor degrades
+  output quality — a second, domain-independent (machine translation) precedent for the
+  RPO-style NLL anchor beyond `pang2024irpo`.
+- **`gupta2024refa`** — Gupta, Madhavan, Zhang, Bansal, Rajmohan (arXiv:2412.16378,
+  unreviewed preprint). Treats EOS-token probability as a first-class regularisation
+  target in DPO-family losses, but for the mirror-image failure (premature truncation
+  under length-normalised objectives), not our under-termination finding — cite as
+  evidence that EOS termination is a recognised, separately-regularisable control point,
+  not as replication of our result. Verifier corrected title casing; OpenReview status
+  still unextractable — treat as preprint.
+
+### Guardrail & moderation evaluations and what content classifiers miss
+
+- **`wang2026sokguardrails`** — Wang, Ji, Wang, Li, Wu, Wang (IEEE S&P 2026; confirmed on
+  the official S&P 2026 program). First systematisation-of-knowledge of LLM jailbreak
+  guardrails with a Security-Efficiency-Utility evaluation frame; situates
+  Llama-Guard-3-8B (our B3 mechanism) in the current guardrail landscape. Its comparisons
+  are **guardrail-vs-guardrail only** — no arm treats training-time safety as an
+  alternative to a filter, so the B3-vs-T design remains unrun there. (No IEEE Xplore
+  DOI locatable as of 2026-08-27; bibtex note covers the fallback.)
+- **`mazeika2024harmbench`** — Mazeika et al., 12 authors (ICML 2024, PMLR 235).
+  Standardises ASR measurement across attacks and defences and shows that evaluation
+  pipeline choices — including the success classifier — materially change reported ASR
+  numbers. External support for this project's pinned-judge, pinned-rubric evaluation
+  design and for stating our ASR definition explicitly rather than assuming
+  comparability.
+- **`souly2024strongreject`** — Souly et al., 11 authors (NeurIPS 2024 Datasets and
+  Benchmarks). Shows common jailbreak-success graders systematically overestimate attack
+  success — many nominally "jailbroken" outputs are empty or useless, i.e. content-level
+  classifiers miss what actually matters about a response. This is the closest published
+  analogue of our own beaver-dam finding (a content/topic classifier missing behavioural
+  attack success, κ ≤ 0.064 corrected-path) and directly supports the behavioural-rubric
+  ASR judge choice.
+
+### Jailbreak taxonomies
+
+- **`ganguli2022redteam`** — Ganguli et al., 37 authors (Anthropic technical report,
+  arXiv:2209.07858, 2022; arXiv is the only venue — cite as preprint/report). Early
+  large-scale manual red-teaming with a harm taxonomy and scaling analysis; methodological
+  ancestor for building a categorised red-team suite and for reporting where a model
+  still fails.
+- **`zou2023gcg`** — Zou, Wang, Carlini, Nasr, Kolter, Fredrikson (arXiv:2307.15043).
+  GCG: universal, transferable adversarial suffixes against aligned models — the
+  canonical automated token-level jailbreak. Sits outside our frozen prompt-level
+  taxonomy but is the standard citation that alignment alone is attackable. Verifier
+  found no peer-reviewed venue; remains an arXiv preprint despite wide citation.
+- **`wei2023icd`** — Wei, Wang, Li, Mo, Wang (now TPAMI vol. 48(6), 2026; originally
+  arXiv:2310.06387, 2023). Shows a handful of in-context demonstrations suffice to
+  jailbreak (and, symmetrically, to guard) aligned models — the few-shot precursor that
+  `many_shot` scales up. **Verifier correction: no longer a preprint** — peer-reviewed
+  TPAMI version confirmed via CrossRef; note the key/year mismatch (key says 2023, citable
+  year is 2026) when this lands in `references.bib`.
+- **`shen2024dan`** — Shen, Chen, Backes, Shen, Zhang (ACM CCS 2024). Characterises
+  1,400+ in-the-wild jailbreak prompts collected over a year, empirically documenting
+  persona/roleplay ("Do Anything Now") as the dominant real-world strategy — grounds our
+  `persona` category in observed practice rather than researcher-invented attacks.
+- **`zeng2024johnny`** — Zeng, Lin, Zhang, Yang, Jia, Shi (ACL 2024). A 40-technique
+  persuasion taxonomy applied to jailbreaking, showing socially persuasive framings
+  defeat safety training on their own. Taxonomic underpinning for persona/
+  social-engineering attacks — especially pertinent to a therapy-support deployment,
+  where emotionally persuasive pressure is native to the domain.
+- **`li2023deepinception`** — Li, Zhou, Zhu, Yao, Liu, Han (arXiv:2311.03191, unreviewed
+  preprint through v5). Nested-scene/persona "hypnosis" jailbreak; secondary source for
+  the `persona` category's deeper role-embedding variants.
+- **`vega2023priming`** — Vega, Chaudhary, Xu, Singh (ICLR 2024 Tiny Papers Track).
+  Demonstrates that priming the start of the response bypasses safety training of
+  open-source LLMs at negligible cost — direct methodological source for our
+  `prefilling` category. Provenance caveat from verification: Tiny Papers is a
+  lighter-review poster track, weaker provenance than main-track ICLR; year corrected
+  from 2023 (arXiv) to 2024 (published version).
+- **`li2025prefill`** — Li et al., 10 authors (arXiv:2504.21038, unreviewed preprint).
+  Black-box risk analysis of prefill-level jailbreaks — the most recent systematic
+  treatment of the prefilling attack surface our `prefilling` category tests.
+- **`russinovich2024crescendo`** — Russinovich, Salem, Eldan (USENIX Security 2025).
+  Crescendo: a multi-turn escalation jailbreak that walks a model into harmful content
+  via individually innocuous steps. Relevant both to the escalation logic behind
+  `many_shot` and to Discussion as the adaptive multi-turn failure mode our frozen
+  single-turn suite does not capture. (Verifier: title/authors/venue fetch-confirmed;
+  exact page range from an indexed snippet only — slightly lower confidence.)
+- **`yi2024jailbreaksurvey`** — Yi, Liu, Sun, Cong, He, Song, Xu, Li (arXiv:2407.04295,
+  unreviewed preprint). Survey organising jailbreak attacks and defences, including the
+  field's own split between training-time and inference-time defences — the same axis our
+  B3-vs-T comparison measures head-to-head; the survey catalogues both sides but cites no
+  controlled comparison between them.
+
+### Bibliography for this section
+
+```bibtex
+@inproceedings{bianchi2024safetytuned,
+  title={Safety-Tuned {LL}a{MA}s: Lessons From Improving the Safety of Large Language Models that Follow Instructions},
+  author={Bianchi, Federico and Suzgun, Mirac and Attanasio, Giuseppe and R{\"o}ttger, Paul and Jurafsky, Dan and Hashimoto, Tatsunori and Zou, James},
+  booktitle={The Twelfth International Conference on Learning Representations (ICLR)},
+  year={2024},
+  url={https://openreview.net/forum?id=gT5hALch9z}
+}
+@inproceedings{li2026superficial,
+  title={Superficial Safety Alignment Hypothesis},
+  author={Li, Jianwei and Kim, Jung-Eun},
+  booktitle={The Fourteenth International Conference on Learning Representations (ICLR)},
+  year={2026},
+  url={https://openreview.net/forum?id=9yS40pO1RF}
+}
+@inproceedings{wang2025adversarial,
+  title={Adversarial Preference Learning for Robust {LLM} Alignment},
+  author={Wang, Yuanfu and Wang, Pengyu and Xi, Chenyang and Tang, Bo and Zhu, Junyi and Wei, Wenqiang and Chen, Chen and Yang, Chao and Zhang, Jingfeng and Lu, Chaochao and Niu, Yijun and Mao, Keming and Li, Zhiyu and Xiong, Feiyu and Hu, Jie and Yang, Mingchuan},
+  booktitle={Findings of the Association for Computational Linguistics: ACL 2025},
+  month=jul,
+  year={2025},
+  address={Vienna, Austria},
+  publisher={Association for Computational Linguistics},
+  pages={21865--21881},
+  doi={10.18653/v1/2025.findings-acl.1126}
+}
+@article{pal2024smaug,
+  title={Smaug: Fixing Failure Modes of Preference Optimisation with {DPO}-Positive},
+  author={Pal, Arka and Karkhanis, Deep and Dooley, Samuel and Roberts, Manley and Naidu, Siddartha and White, Colin},
+  journal={arXiv preprint arXiv:2402.13228},
+  year={2024}
+}
+@inproceedings{azar2024ipo,
+  title={A General Theoretical Paradigm to Understand Learning from Human Preferences},
+  author={Azar, Mohammad Gheshlaghi and Guo, Zhaohan Daniel and Piot, Bilal and Munos, Remi and Rowland, Mark and Valko, Michal and Calandriello, Daniele},
+  booktitle={Proceedings of the 27th International Conference on Artificial Intelligence and Statistics},
+  pages={4447--4455},
+  year={2024},
+  editor={Dasgupta, Sanjoy and Mandt, Stephan and Li, Yingzhen},
+  volume={238},
+  series={Proceedings of Machine Learning Research},
+  month={02--04 May},
+  publisher={PMLR},
+  note={arXiv:2310.12036}
+}
+@inproceedings{hong2024orpo,
+  title={{ORPO}: Monolithic Preference Optimization without Reference Model},
+  author={Hong, Jiwoo and Lee, Noah and Thorne, James},
+  editor={Al-Onaizan, Yaser and Bansal, Mohit and Chen, Yun-Nung},
+  booktitle={Proceedings of the 2024 Conference on Empirical Methods in Natural Language Processing},
+  month=nov,
+  year={2024},
+  address={Miami, Florida, USA},
+  publisher={Association for Computational Linguistics},
+  doi={10.18653/v1/2024.emnlp-main.626},
+  pages={11170--11189},
+  note={arXiv:2403.07691}
+}
+@inproceedings{xu2024cpo,
+  title={Contrastive Preference Optimization: Pushing the Boundaries of {LLM} Performance in Machine Translation},
+  author={Xu, Haoran and Sharaf, Amr and Chen, Yunmo and Tan, Weiting and Shen, Lingfeng and Van Durme, Benjamin and Murray, Kenton and Kim, Young Jin},
+  booktitle={Proceedings of the 41st International Conference on Machine Learning},
+  pages={55204--55224},
+  year={2024},
+  editor={Salakhutdinov, Ruslan and Kolter, Zico and Heller, Katherine and Weller, Adrian and Oliver, Nuria and Scarlett, Jonathan and Berkenkamp, Felix},
+  volume={235},
+  series={Proceedings of Machine Learning Research},
+  month={21--27 Jul},
+  publisher={PMLR},
+  note={arXiv:2401.08417}
+}
+@misc{gupta2024refa,
+  title={{REFA}: Reference Free Alignment for multi-preference optimization},
+  author={Gupta, Taneesh and Madhavan, Rahul and Zhang, Xuchao and Bansal, Chetan and Rajmohan, Saravan},
+  year={2024},
+  eprint={2412.16378},
+  archivePrefix={arXiv},
+  url={https://arxiv.org/abs/2412.16378},
+  note={arXiv preprint, not peer-reviewed. v1: 20 Dec 2024; current v4: 5 Nov 2025.}
+}
+@inproceedings{wang2026sokguardrails,
+  title={{SoK}: Evaluating Jailbreak Guardrails for Large Language Models},
+  author={Wang, Xunguang and Ji, Zhenlan and Wang, Wenxuan and Li, Zongjie and Wu, Daoyuan and Wang, Shuai},
+  booktitle={2026 IEEE Symposium on Security and Privacy (SP)},
+  year={2026},
+  address={San Francisco, CA, USA},
+  note={Presented 18--21 May 2026 (confirmed on the official S\&P 2026 program, Track 1: Machine Learning Security, Session 1). arXiv preprint: arXiv:2506.10597 (v1 12 Jun 2025, v2 16 Oct 2025). No IEEE Xplore DOI/page could be located as of this verification (27 Aug 2026); if none is available at submission time, cite the arXiv preprint instead.}
+}
+@inproceedings{mazeika2024harmbench,
+  title     = {{HarmBench}: A Standardized Evaluation Framework for Automated Red Teaming and Robust Refusal},
+  author    = {Mazeika, Mantas and Phan, Long and Yin, Xuwang and Zou, Andy and Wang, Zifan and Mu, Norman and Sakhaee, Elham and Li, Nathaniel and Basart, Steven and Li, Bo and Forsyth, David and Hendrycks, Dan},
+  booktitle = {Proceedings of the 41st International Conference on Machine Learning},
+  series    = {Proceedings of Machine Learning Research},
+  volume    = {235},
+  pages     = {35181--35224},
+  year      = {2024},
+  publisher = {PMLR}
+}
+@inproceedings{souly2024strongreject,
+  title     = {A {StrongREJECT} for Empty Jailbreaks},
+  author    = {Souly, Alexandra and Lu, Qingyuan and Bowen, Dillon and Trinh, Tu and Hsieh, Elvis and Pandey, Sana and Abbeel, Pieter and Svegliato, Justin and Emmons, Scott and Watkins, Olivia and Toyer, Sam},
+  booktitle = {Advances in Neural Information Processing Systems 37 (NeurIPS 2024)},
+  year      = {2024},
+  note      = {Datasets and Benchmarks Track}
+}
+@article{ganguli2022redteam,
+  title={Red Teaming Language Models to Reduce Harms: Methods, Scaling Behaviors, and Lessons Learned},
+  author={Ganguli, Deep and Lovitt, Liane and Kernion, Jackson and Askell, Amanda and Bai, Yuntao and Kadavath, Saurav and Mann, Ben and Perez, Ethan and Schiefer, Nicholas and Ndousse, Kamal and Jones, Andy and Bowman, Sam and Chen, Anna and Conerly, Tom and DasSarma, Nova and Drain, Dawn and Elhage, Nelson and El-Showk, Sheer and Fort, Stanislav and Hatfield-Dodds, Zac and Henighan, Tom and Hernandez, Danny and Hume, Tristan and Jacobson, Josh and Johnston, Scott and Kravec, Shauna and Olsson, Catherine and Ringer, Sam and Tran-Johnson, Eli and Amodei, Dario and Brown, Tom and Joseph, Nicholas and McCandlish, Sam and Olah, Chris and Kaplan, Jared and Clark, Jack},
+  journal={arXiv preprint arXiv:2209.07858},
+  year={2022}
+}
+@article{zou2023gcg,
+  title   = {Universal and Transferable Adversarial Attacks on Aligned Language Models},
+  author  = {Zou, Andy and Wang, Zifan and Carlini, Nicholas and Nasr, Milad and Kolter, J. Zico and Fredrikson, Matt},
+  journal = {arXiv preprint arXiv:2307.15043},
+  year    = {2023}
+}
+@article{wei2023icd,
+  title   = {Jailbreak and Guard Aligned Language Models With Only Few In-Context Demonstrations},
+  author  = {Wei, Zeming and Wang, Yifei and Li, Ang and Mo, Yichuan and Wang, Yisen},
+  journal = {IEEE Transactions on Pattern Analysis and Machine Intelligence},
+  volume  = {48},
+  number  = {6},
+  pages   = {6835--6846},
+  year    = {2026},
+  doi     = {10.1109/TPAMI.2026.3660147},
+  note    = {Originally released as arXiv:2310.06387 (Oct.\ 2023)}
+}
+@inproceedings{shen2024dan,
+  title     = {``Do Anything Now'': Characterizing and Evaluating In-The-Wild Jailbreak Prompts on Large Language Models},
+  author    = {Shen, Xinyue and Chen, Zeyuan and Backes, Michael and Shen, Yun and Zhang, Yang},
+  booktitle = {Proceedings of the 2024 ACM SIGSAC Conference on Computer and Communications Security (CCS '24)},
+  pages     = {1671--1685},
+  year      = {2024},
+  publisher = {ACM},
+  doi       = {10.1145/3658644.3670388}
+}
+@inproceedings{zeng2024johnny,
+  title={How Johnny Can Persuade {LLM}s to Jailbreak Them: Rethinking Persuasion to Challenge {AI} Safety by Humanizing {LLM}s},
+  author={Zeng, Yi and Lin, Hongpeng and Zhang, Jingwen and Yang, Diyi and Jia, Ruoxi and Shi, Weiyan},
+  editor={Ku, Lun-Wei and Martins, Andre and Srikumar, Vivek},
+  booktitle={Proceedings of the 62nd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers)},
+  month=aug,
+  year={2024},
+  address={Bangkok, Thailand},
+  publisher={Association for Computational Linguistics},
+  doi={10.18653/v1/2024.acl-long.773},
+  pages={14322--14350},
+  url={https://aclanthology.org/2024.acl-long.773/}
+}
+@misc{li2023deepinception,
+  title={DeepInception: Hypnotize Large Language Model to Be Jailbreaker},
+  author={Li, Xuan and Zhou, Zhanke and Zhu, Jianing and Yao, Jiangchao and Liu, Tongliang and Han, Bo},
+  year={2023},
+  eprint={2311.03191},
+  archivePrefix={arXiv},
+  primaryClass={cs.LG},
+  url={https://arxiv.org/abs/2311.03191},
+  note={arXiv preprint, not peer-reviewed as of the latest checked version. v1: 6 Nov 2023; current v5: 28 Nov 2024.}
+}
+@inproceedings{vega2023priming,
+  title        = {Bypassing the Safety Training of Open-Source {LLM}s with Priming Attacks},
+  author       = {Vega, Jason and Chaudhary, Isha and Xu, Changming and Singh, Gagandeep},
+  booktitle    = {The Second Tiny Papers Track at ICLR 2024},
+  year         = {2024},
+  url          = {https://arxiv.org/abs/2312.12321},
+  note         = {ICLR 2024 Tiny Papers Track (poster); arXiv preprint arXiv:2312.12321}
+}
+@misc{li2025prefill,
+  title={Prefill-level Jailbreak: A Black-Box Risk Analysis of Large Language Models},
+  author={Li, Yakai and Hu, Jiekang and Sang, Weiduan and Ma, Luping and Nie, Dongsheng and Zhang, Weijuan and Yu, Aimin and Su, Yi and Huang, Qingjia and Zhou, Qihang},
+  year={2025},
+  eprint={2504.21038},
+  archivePrefix={arXiv},
+  primaryClass={cs.CR},
+  url={https://arxiv.org/abs/2504.21038},
+  note={arXiv preprint, not peer-reviewed. v1: 28 Apr 2025; v2: 25 Aug 2025.}
+}
+@inproceedings{russinovich2024crescendo,
+  title     = {Great, Now Write an Article About That: The Crescendo Multi-Turn {LLM} Jailbreak Attack},
+  author    = {Russinovich, Mark and Salem, Ahmed and Eldan, Ronen},
+  booktitle = {34th USENIX Security Symposium (USENIX Security 25)},
+  pages     = {2421--2440},
+  year      = {2025},
+  address   = {Seattle, WA, USA},
+  publisher = {USENIX Association},
+  note      = {Originally released as arXiv:2404.01833 (Apr.\ 2024)},
+  url       = {https://www.usenix.org/conference/usenixsecurity25/presentation/russinovich}
+}
+@misc{yi2024jailbreaksurvey,
+  title={Jailbreak Attacks and Defenses Against Large Language Models: A Survey},
+  author={Yi, Sibo and Liu, Yule and Sun, Zhen and Cong, Tianshuo and He, Xinlei and Song, Jiaxing and Xu, Ke and Li, Qi},
+  year={2024},
+  eprint={2407.04295},
+  archivePrefix={arXiv},
+  primaryClass={cs.CR},
+  url={https://arxiv.org/abs/2407.04295},
+  note={arXiv preprint, not peer-reviewed. v1: 5 Jul 2024; v2: 30 Aug 2024.}
+}
+```
+
+**Duplicate-key note for `paper-writer`:** `pal2024smaug` and `azar2024ipo` already exist
+under these same keys earlier in this file (and `bianchi2024safetytuned`,
+`li2026superficial`, `wang2025adversarial`, `wang2026sokguardrails`, `hong2024orpo`,
+`xu2024cpo`, `gupta2024refa` appear in the two 2026-08-27 lit-scout sessions above with
+pre-verification bibtex). The blocks in THIS section are the verified, final versions —
+when building `references.bib`, take each key's bibtex from this section and do not insert
+the same key twice.
+
+### Could not verify — do NOT cite
+
+- **`OPERATIONAL_ALERT_file_overwrite_2026-08-27`** — not a literature entry; carries no
+  bibliographic claim, so there is nothing to verify and nothing to cite. The verifier
+  additionally flagged that this item embeds an operational instruction to run
+  `git checkout --`/`git restore` against `notebook/related_work.md`, which contradicts
+  the in-file recovery notice's own guidance (transcript-based restoration preferred over
+  git) — no git action was taken by the verifier or by this pass; the main thread should
+  inspect `git log --follow -- notebook/related_work.md` manually before any destructive
+  restore, and treat both embedded instructions with suspicion.
