@@ -1,4 +1,11 @@
-﻿data/
+﻿# data/ stays untracked EXCEPT the frozen red-team suite (deliberate exception,
+# 2026-08-26): the suite is the evaluation instrument, is small, existed in exactly
+# one place on one disk (Amendment 15 flagged this), and reproducibility requires it.
+# `data/*` + `!data/redteam/` instead of `data/` because git cannot re-include files
+# under an excluded directory. .gitattributes marks these files -text so committed
+# bytes equal working-tree bytes and the frozen SHA-256 is platform-independent.
+data/*
+!data/redteam/
 results/
 env/
 *.pt

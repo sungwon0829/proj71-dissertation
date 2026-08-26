@@ -1,0 +1,4 @@
+﻿FROZEN 2026-07-31 01:22:46 +09:00
+sha256(redteam_suite.jsonl) = e14c3a24184d01cbf31bbcfa42be03104ae07b0bea1132bc5b08a177645b6689
+items = 300 (60 per category x 5)
+Do not add, remove, or edit any item. Never train on this directory.
