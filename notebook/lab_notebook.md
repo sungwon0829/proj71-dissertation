@@ -2776,3 +2776,39 @@ re-score b3/t with `--over_refusal_labels`. **Because the filter replaced zero b
 responses, b3's benign text is byte-identical to b2's, so the b3 labels legitimately
 apply to b2 with a provenance note.**
 
+## 2026-08-27 — Preliminary repro audit (read-only, before labels): 0 critical; dispositions
+
+`repro-auditor` ran against everything on disk while labelling is pending. **Zero
+critical findings.** It independently recomputed every stats-report number from the
+scored files (exact match, including per-category and discordant counts) and proved by
+commit ordering that Amendment 22 precedes every cross-arm artefact. Findings and
+main-thread dispositions:
+
+1. **(major) Canonical/stale filename inversion in b0/b1 dirs** — dev-era pre-pin files
+   held the clean names while the canonical b0 pass carries a SUPERSEDED suffix.
+   **Fixed:** dev files renamed (`*_DEV_PREPIN.*` in b0; `*_DEV_VOID_B1V1.*` in b1 —
+   the latter was generated from the VOID checkpoint), and a `README.md` in each dir
+   names the canonical files. The canonical b0 file keeps its awkward name because
+   `summary_realsuite.json` records that exact path; the README explains it.
+2. **(major) Seed labelling 42-vs-1** — eval artefacts say `seed: 42` (the GENERATION
+   seed; greedy decoding, dir-naming convention) while the arms are defined by
+   TRAINING seed 1 (adapter paths disambiguate). **Disposition:** convention recorded
+   here and to be stated in Methods — `results/<arm>_seed42/` is keyed on the
+   generation seed; the training seed lives in the adapter path and the run manifest.
+   Emitted summaries are not edited post-hoc.
+3. **(major) prereg §6 had no forward pointer to Amendment 22** — **fixed**, dated,
+   append-only. CLAUDE.md's headline template ("n=3 seeds") can no longer be emitted
+   as written; stats.py already prints the k=1 form with the Amendment 22 note.
+4. (minor) stale bug-era `results/stats_report.json` → renamed
+   `stats_report_SUPERSEDED_bugera_20260731.json`.
+5. (minor) Amendments 21/22 dated 08-26 but committed 00:00:30 on 08-27 — dated note
+   added to the amendments file; blindness is proven by ordering, not the date label.
+6. (minor) CLAUDE.md's "ROLES AS ACTUALLY PINNED" table still named beaver-dam as the
+   filter — **updated** to Llama Guard @ `7327bd9f…` / v3 lock with a dated note; the
+   Revision 2 table remains visible in the superseded block.
+7. (cosmetic) stale beaver-dam truncation note in summaries' self-checks and a v2-lock
+   mention in a judges.yaml comment — left; tidy only at the next legitimate re-emit.
+
+Audit's tool-limitation closed from this shell: `redteam_suite.jsonl` recomputes to
+`e14c3a24…` and the v3 lock to `1c6572b6…` — both match the recorded pins.
+

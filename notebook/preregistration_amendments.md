@@ -1028,3 +1028,10 @@ else that needs the owner.
 *Decided blind to arm-comparison results.* No arm scored with the pinned configuration,
 B3 never generated, T seed 1 without generations, no Llama Guard verdict on any T or B3
 output exists.
+
+> **Commit-date note (2026-08-27, repro-audit finding 5).** Amendments 21 and 22 are
+> dated 2026-08-26 (when the session drafting them began) but were committed at
+> 2026-08-27 00:00:30 +09:00 (`d957405`) — thirty seconds past local midnight. The
+> blindness claim is unaffected and is proven by commit ordering, not by the date
+> label: `d957405` precedes every cross-arm artefact (first B3 derivation 00:39, first
+> scoring 00:47, stats 01:17+).

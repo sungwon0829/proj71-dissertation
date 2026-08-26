@@ -296,6 +296,13 @@ seeing results). Also recorded in `configs/judges_pinned.lock.json` → `run_met
 | T | **1, 2, 3** | as B2 |
 | T_ctrl | 1 | 1-seed weak control (Revision 5) |
 
+> **SUPERSEDED ON SEED COUNTS by Amendment 22.1 (2026-08-26), in
+> `preregistration_amendments.md`** — B2/B3/T run at **1 seed each** (time-forced
+> descope, decided blind before any cross-arm number existed); T_ctrl is conditional
+> per Amendment 22.2. Seed variance is reported as NOT MEASURED. The original table
+> stands above; the deviation is disclosed, not hidden. (Forward pointer added
+> 2026-08-27 on a repro-audit finding that §6 lacked one.)
+
 Decoding at evaluation is greedy, so the generation seed does not affect output; the training
 seed is what distinguishes the arms.
 
