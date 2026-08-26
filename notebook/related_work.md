@@ -2675,3 +2675,71 @@ the same key twice.
   git) — no git action was taken by the verifier or by this pass; the main thread should
   inspect `git log --follow -- notebook/related_work.md` manually before any destructive
   restore, and treat both embedded instructions with suspicion.
+
+### Addendum (2026-08-27, retry pass): placeholder resolutions and guardrail-miss strand
+
+All verdicts below were applied to `paper/references.bib` on 2026-08-27; every entry
+carries a `Verified 2026-08-27 against <evidence_url>` note.
+
+**Resolved placeholder keys (Block B → final entries, key names unchanged so draft
+citations still resolve):**
+
+- `qwen2024qwen25` — now cites the Qwen2.5 Technical Report, arXiv:2412.15115 (Qwen Team,
+  2024; preprint). Note: the live HF model card's own citation block is outdated and lists
+  a blog entry plus the older Qwen2 report; 2412.15115 is the correct standard citation.
+- `hu2022lora` — now cites Hu et al., "LoRA: Low-Rank Adaptation of Large Language
+  Models", ICLR 2022 (published venue preferred over the arXiv:2106.09685 preprint).
+- `rafailov2023dpo` — now cites Rafailov et al., "Direct Preference Optimization: Your
+  Language Model is Secretly a Reward Model", NeurIPS 2023 (official proceedings).
+- `liu2021esconv` — now cites Liu et al., "Towards Emotional Support Dialog Systems",
+  ACL-IJCNLP 2021, pp. 3469–3483 (ACL Anthology); the ESConv dataset paper behind
+  thu-coai/esconv. Verifier's ACL-Anthology bibtex key was renamed to `liu2021esconv` to
+  match the draft's citation.
+- `bertagnolli2020counselchat` — now cites the CounselChat dataset artefact itself
+  (@misc, HuggingFace nbertagnolli/counsel-chat, MIT license, 2020); no peer-reviewed
+  paper exists — the author-designated citation is the 2020 Towards Data Science article.
+- `chao2024jailbreakbench` — now cites Chao et al., "JailbreakBench", NeurIPS 2024
+  Datasets and Benchmarks Track (official proceedings).
+- `huang2023maliciousinstruct` — now cites Huang et al., "Catastrophic Jailbreak of
+  Open-source LLMs via Exploiting Generation", ICLR 2024 Spotlight Poster (source of the
+  MaliciousInstruct set: 100 harmful instructions, 10 categories). Key retains the 2023
+  arXiv date despite the ICLR 2024 venue — kept as-is because the draft cites this key.
+- `wang2024donotanswer` — now cites Wang et al., "Do-Not-Answer: Evaluating Safeguards in
+  LLMs", Findings of EACL 2024, pp. 896–911 (published title differs slightly from the
+  arXiv:2308.13387 preprint title; published form used).
+
+**Still-unresolved placeholder keys:** none — all eight Block B placeholders were
+resolved in this pass.
+
+**Verified guardrail entries (appended to the Block A additions section):**
+
+- `inan2023llamaguard` (Llama Guard, arXiv:2312.06674, preprint — state this in the
+  paper). Required provenance citation for the B3 filter mechanism itself:
+  Llama-Guard-3-8B, the pinned B3 guardrail, is a later checkpoint of this family. This
+  is the paper that defines what the bolted-on baseline *is*.
+- `markov2023holistic` (OpenAI moderation, AAAI 2023). The canonical content-classifier
+  baseline; anchors the claim that post-hoc moderation via a content classifier is the
+  field's default deployment pattern — the pattern B3 instantiates and T is compared
+  against. Also the classifier whose crisis miss rate Nelson et al. quantify below.
+- `han2024wildguard` (WildGuard, NeurIPS 2024). Shows Llama-Guard-2 and prompted GPT-4
+  lag badly on adversarial jailbreaks and refusal detection specifically — direct
+  published support for the classifier-blindness exhibit's framing that behavioural harm
+  evades content classifiers, and evidence the B3-style filter baseline has known
+  adversarial weaknesses independent of our suite.
+- `zeng2024shieldgemma` (ShieldGemma, arXiv:2407.21772, preprint). Google's QA-style
+  content-classifier family with a topic taxonomy (sexual, dangerous, harassment, hate) —
+  a natural stand-in for the QA-moderation-classifier baseline discussed alongside Llama
+  Guard, and further evidence such filters are topic detectors by design.
+- `ghosh2024aegis` (AEGIS, arXiv:2404.05993, preprint; successor AEGIS2.0 was published
+  at NAACL 2025, the original was not). NVIDIA's content-safety taxonomy/classifier
+  family; links to Nelson et al. below, whose mental-health comparison uses an
+  Aegis-derived guardrail — connecting the generic-classifier strand to the
+  psychiatric-crisis miss-rate evidence.
+- `nelson2026guardrail` (npj Digital Medicine, 2026, peer-reviewed). Strongest external
+  match for the content-classifier-miss claim: OpenAI moderation misses ~58% of
+  psychiatric crisis messages (sensitivity 0.419) and an NVIDIA/Aegis-based guardrail
+  misses ~24% (sensitivity 0.759), versus their own guardrail's 0.99. Directly
+  corroborates, on a different mental-health dataset, the project's own 84–97% miss-rate
+  finding behind the classifier-blindness exhibit, and shows peer-reviewed precedent that
+  off-the-shelf bolted-on filters underperform in exactly the crisis-adjacent regime our
+  B3 baseline occupies.

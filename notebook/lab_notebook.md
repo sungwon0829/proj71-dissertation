@@ -3015,3 +3015,15 @@ disown
   results/incidents/related_work_DAMAGED_20260827.md (gitignored); full agent transcripts
   preserved in the session workflow directory (wf_061ab841-3f6). Rule reinforced: search
   agents return structured data only and never write repo files.
+
+## 2026-08-27 — A2 retry pass complete: all 8 placeholder keys resolved; Llama Guard cited
+
+Tightened retry (one agent per key, structured-output-only, no file writes by searchers):
+8/8 Block B placeholders verified and replaced in place, keys unchanged (Qwen2.5 report
+arXiv:2412.15115; LoRA ICLR 2022; DPO NeurIPS 2023; ESConv ACL-IJCNLP 2021; CounselChat
+dataset artefact — no peer-reviewed paper exists, verified; JailbreakBench NeurIPS 2024
+D&B; MaliciousInstruct ICLR 2024 Spotlight; Do-Not-Answer Findings of EACL 2024). Six
+guardrail-evaluation entries added, including inan2023llamaguard — the pinned B3 filter's
+own paper, previously uncited — and nelson2026guardrail, whose measured crisis-domain
+guardrail sensitivities (0.419/0.759 vs 0.99 in-domain) independently corroborate the
+classifier-blindness exhibit. references.bib now has 58 entries, zero unverified.
