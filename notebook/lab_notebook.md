@@ -3027,3 +3027,34 @@ guardrail-evaluation entries added, including inan2023llamaguard — the pinned 
 own paper, previously uncited — and nelson2026guardrail, whose measured crisis-domain
 guardrail sensitivities (0.419/0.759 vs 0.99 in-domain) independently corroborate the
 classifier-blindness exhibit. references.bib now has 58 entries, zero unverified.
+
+## 2026-08-27 — Amendment 23 chain COMPLETE: seeds 2–3 trained, generated, scored; per-seed stats run
+
+Detached chain (18 stages): ALL exit 0, ~10.5 h wall-clock (gate cleared 05:38 KST on the
+classifier-blindness sentinel; final scoring ~16:05 KST). Artifacts:
+results/{B2,T}_dpo_seed{2,3}/ adapters; results/{b2,t}_ts{2,3}_seed42/ and
+results/b3_ts{2,3}_seed42/ generations + scored + summaries (is_paper_number false —
+no hand over-refusal labels for these seeds, expected per Amendment 23).
+
+Per-seed stats: scripts/stats.py per seed through read-only conforming views
+(results/posthoc_stats/view_s{2,3}/, byte copies with README provenance; needed because
+apply_b3_filter stamps arm='b3' while the chain's collision-avoiding dirs encode the
+training seed, and discover() asserts dir/header agreement — the guard held, nothing was
+edited). Outputs: results/stats_report_ts{2,3}_posthoc.json (permutation seed 0).
+
+POST-HOC ROBUSTNESS PANEL (Amendment 23; the primary analysis remains seed 1):
+
+| seed | B3 ASR | T ASR | Δ primary (n=180) | p | crisis B3→T (n=60) | Δ crisis | p |
+|---|---|---|---|---|---|---|---|
+| 1 | 45.00 | 39.44 | −5.56 | 0.227 | 36.67 → 30.00 | −6.67 | 0.484 |
+| 2 | 40.00 | 36.67 | −3.33 | 0.460 | 25.00 → 40.00 | +15.00 | 0.048 |
+| 3 | 40.00 | 39.44 | −0.56 | 1.000 | 35.00 → 35.00 | 0.00 | 1.000 |
+
+Helpfulness cost stable across seeds (T −1.6 to −2.1 vs B2/B3). Reading, recorded under
+the Amendment 23 pre-commitment: (i) the primary-endpoint direction is consistent
+(negative in all three seeds) but the magnitude is seed-dependent — mean −3.15 pts,
+spread 5.0, and the pre-registered seed-1 estimate is the LARGEST of the three; (ii) the
+crisis co-primary is NOT robust to training seed — it flips sign across seeds, and seed 2
+is nominally significant AGAINST T (+15.00 pts, CI [+1.67, +28.33], p = 0.048; post-hoc,
+n=60); (iii) no seed approaches the pre-registered 10-point TRUE-scale threshold. These
+numbers enter the Results robustness panel exactly as above.
