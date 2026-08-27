@@ -3374,3 +3374,16 @@ re-verified from git log). Findings and main-thread dispositions:
 - m6: judges.yaml line-10 comment stale ("…v3") but NOT edited (sha recorded in artifact
   headers) — recorded here. CLAUDE.md headline template and paper/abstract.tex
   "3 seeds"/"mean ± CI over seeds" must not survive drafting; assigned to paper-writer.
+
+## 2026-08-28 — Step-6 citation verification: nelson2026guardrail confirmed; annotation corrected
+
+Independent re-verification against the article page: metadata exact (Nelson et al.,
+npj Digital Medicine 9:407, 2026, DOI 10.1038/s41746-026-02579-5). The figures were
+misframed in the 2026-08-27 A2-retry entry and the related_work.md addendum as
+"out-of-domain 0.419/0.759 vs in-domain 0.99": the paper's actual structure is OpenAI
+guardrail sensitivity 0.419 and NVIDIA 0.759 (general-purpose systems, external
+dataset) vs Verily's purpose-built guardrail 0.990 (internal data), p < 0.001.
+Corrected in references.bib (note field) and via a dated correction note in
+related_work.md; prior entries left unedited per append-only. The corroboration of the
+classifier-blindness exhibit stands in the corrected general-purpose-vs-purpose-built
+form, with the cross-dataset caveat stated.

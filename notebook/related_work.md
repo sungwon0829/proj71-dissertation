@@ -2743,3 +2743,19 @@ resolved in this pass.
   finding behind the classifier-blindness exhibit, and shows peer-reviewed precedent that
   off-the-shelf bolted-on filters underperform in exactly the crisis-adjacent regime our
   B3 baseline occupies.
+
+### Correction (2026-08-28): nelson2026guardrail annotation misframed the figures
+
+The addendum above described the paper's sensitivities as one guardrail measured
+"out-of-domain (0.419/0.759) vs in-domain (0.99)". Independent re-verification against
+the article page (title, authors, venue, DOI all exact) shows the correct structure:
+**0.419 is the OpenAI guardrail's sensitivity (specificity 0.999) and 0.759 the NVIDIA
+guardrail's, on an external dataset, while 0.990 is Verily's own purpose-built mental
+health guardrail on internal data** ("the VMHG's sensitivity was significantly higher
+than the NVIDIA and OpenAI guardrails (p < 0.001)"). So the contrast is general-purpose
+vs purpose-built guardrails, with a cross-dataset caveat — not a single system's domain
+transfer. The corroboration for this project's claim survives in that corrected form:
+general-purpose bolt-on guardrails miss the majority of psychiatric-crisis content that
+a purpose-built system catches, consistent with the classifier-blindness exhibit. Any
+use in the paper must cite the corrected framing; the addendum's original sentence is
+left unedited above per append-only convention.
