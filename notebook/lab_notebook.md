@@ -3281,3 +3281,96 @@ nominally significant AGAINST T (+15.00 pts, CI [+1.67, +28.33], p = 0.048; post
 n=60) — reported as-is, not softened; (iii) no seed approaches the pre-registered
 10-point TRUE-scale threshold. Helpfulness cost stable across seeds (T −1.6 to −2.1 vs
 B2/B3). Seeds 2–3 carry no hand over-refusal labels (expected; is_paper_number false).
+
+## 2026-08-28 — Repro-audit fixes M2/M3/m1: headline qualifier plumbing + two documentation corrections (append-only addendum)
+
+**Script:** `scripts/stats.py` (M2 fix), `scripts/make_tables_final.py` (carries the
+qualified sentence), assertion script (scratchpad, one-shot). CPU only. No judge re-run,
+no generation touched, no pinned artifact modified.
+
+**M2 (defect and fix).** `eval_score.py` writes `asr_measurement_properties` into each
+arm's `summary.json` but never into the `scored.jsonl` header; `stats.py` read it only
+from the header, so `headline_sentence_full` silently dropped the conservative-lower-bound
+qualifier that `configs/judges.yaml` declares mandatory ("Reporting ASR without this is
+misreporting it"). Fix: `stats.py` now falls back to the arm's summary JSON in the same
+directory as the scored file (`summary.json`, then `summary_realsuite.json`), validating
+arm/seed and requiring all summaries found to agree; `results/posthoc_stats/view_s1/`
+received byte copies of `results/{b3,t}_seed42/summary.json` (cmp-verified, README line
+appended). Prior report preserved as
+`results/stats_report_realsuite_handlabelled_pre_M2fix.json`; report regenerated with
+`--seed 0`; programmatic assertion PASSED: every numeric value identical pre/post; only
+`asr_measurement_properties` (None → block), `headline_sentence_qualifier` (None → text),
+`headline_sentence_full` (qualifier appended), `headline_blockers` (the M2 blocker
+removed, nothing added) and the timestamp differ. `make_tables_final.py --seed 0` re-run:
+all verification checks OK, `tables_final.json` now carries
+`headline_sentence_qualifier`/`headline_sentence_full` and empty `headline_blockers`.
+
+**CORRECTION to the 2026-08-28 TABLES FINAL entry above (that entry is left unedited):**
+its "HEADLINE SENTENCE" section quotes the pre-M2-fix sentence, which lacked the
+mandatory qualifier. The correct full headline sentence, verbatim from the regenerated
+`stats_report_realsuite_handlabelled.json` (`headline_sentence_full`), is:
+
+> T reduces observed ASR from 45.0% to 39.4% (RAW OBSERVED; attenuation correction
+> PENDING -- report raw observed effect only -- the pre-registered 10-point threshold is
+> on the TRUE scale and this figure is not) relative to B3 (n=1 seeds, 180 paired
+> prompts, 95% CI, two-sided paired permutation test (sign-flip on per-prompt
+> differences), p=0.2267), with no evidence of a large over-refusal increase:
+> over-refusal changes by +0.0 points (95% CI [+0.0, +0.0]). ASR is measured by a judge
+> with recall 0.55 and precision 1.0 (Cohen's kappa 0.521, n=36, INTER-MODEL agreement),
+> so both figures under-count true attack success and the observed effect is
+> approximately recall x the true effect. Recall is NOT known to be equal across arms --
+> the judge is documented as under-counting terse arms -- so the contrast is not
+> guaranteed unbiased; see notebook/power_analysis.md for the recall-sensitivity sweep.
+
+**M3 (documented in `results/tables_final/tables_final.md`, Table 1 notes):** b0/b1
+summaries carry `is_paper_number: false` solely because the composite stamp requires hand
+over-refusal labels, which exist only for b2/b3/t; their ASR and helpfulness values are
+used as flagged single-run context, per the ‡ convention.
+
+**m1 (corrected in `results/tables_final/tables_final.md` header):** the sentence "Judge
+pin: lock v4, status VERIFIED in every canonical summary" was wrong for b0/b1 — their
+canonical summaries were scored under lock v3 (2026-08-27 00:47 and 00:54, before v4
+existed); v4's instrument blocks are deep-equal to v3 by the v4 issuance assertion, so
+the instruments are identical across all five arms.
+
+**Outcome:** harness now emits the qualified headline automatically; zero numeric change
+(asserted, not assumed). Wall-clock: ~4 min total (stats re-run + tables re-run).
+
+## 2026-08-28 — Pre-lock repro audit: 0 critical, nothing blocks RESULTS LOCK; closures + dispositions
+
+Read-only audit across traceability, suite-never-trained-on, pin, ordering, independence,
+and the labelling-correction trail: ZERO critical. Hash/command closures run from the main
+shell: ALL PASS (locks v1–v4 byte-exact; suite hash matches working tree AND committed
+blob; judges.yaml matches the sha recorded in summaries; prompt pins verify; generation
+shas match; label-file shas match artifact-embedded records; all six posthoc_stats view
+copies byte-identical to sources; b2==b3 benign responses n=60; make_tables_final 26/26
+rerun; leakage rerun NO LEAKAGE; independence rerun fail-closed; amendment commit ordering
+re-verified from git log). Findings and main-thread dispositions:
+
+- M1 (T_ctrl condition FIRED): Tables 1–2 + primary test complete 2026-08-28, before the
+  30 Aug gate — per Amendment 22.2 the pre-registered path is to TRAIN T_ctrl (1 seed);
+  the "reported as not run" branch is no longer available. Disposition: T_ctrl chain
+  (train → generate → score) launched today; reported as the Revision 5 single-run weak
+  control, italics, no significance test (Amendment 9).
+- M2 (headline qualifier plumbing): FIXED — stats.py falls back to the arm summary for
+  asr_measurement_properties; report re-emitted; numeric byte-equality vs the prior
+  emission ASSERTED (preserved as stats_report_realsuite_handlabelled_pre_M2fix.json);
+  headline_blockers now empty; qualified sentence quoted in the addendum above.
+- M3 / m1: documented/corrected in tables_final.md (is_paper_number composite-stamp note;
+  b0/b1 scored under v3 with v4 instrument blocks deep-equal by issuance assertion).
+- m2: configs/eval_generation.yaml is DECLARED FINAL HERE, as-is, byte-identical to what
+  every artifact recorded (sha e7b5e625…). Deliberately NOT edited — its sha is in every
+  generation header; an edit would break traceability. Its PROPOSED/PROVISIONAL
+  self-description and "(b) 3 training seeds" comment are stale as of this declaration.
+- m3: suite-hash hard-assert exists in one script only — recorded as a known guard gap;
+  no code change post-freeze; every artifact records the identical e14c3a24… hash.
+- m4: results/stats_report_realsuite.json RENAMED to
+  stats_report_realsuite_SUPERSEDED_prelabels_20260827.json (preliminary-audit finding-4
+  precedent). Prior entries referencing the old name stay unedited; this line records
+  the mapping.
+- m5: paper-writer instruction — Methods states the over-refusal correction event in ONE
+  place (gold-gate failure → construct re-check → three corrections → 6/6 → bounding
+  sweep, with the 2-of-120 external-reasoning provenance and single-annotator caveat).
+- m6: judges.yaml line-10 comment stale ("…v3") but NOT edited (sha recorded in artifact
+  headers) — recorded here. CLAUDE.md headline template and paper/abstract.tex
+  "3 seeds"/"mean ± CI over seeds" must not survive drafting; assigned to paper-writer.

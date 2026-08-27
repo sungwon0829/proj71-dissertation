@@ -137,6 +137,48 @@ def discover(results_dir: Path, scored_name: str):
     return dict(out)
 
 
+def asr_measurement_properties_fallback(data):
+    """Repro-audit M2 fallback (2026-08-28). eval_score.py writes
+    `asr_measurement_properties` into summary.json but NOT into the scored.jsonl header,
+    so reading it from the header alone (above) silently drops the mandatory
+    conservative-lower-bound qualifier from the headline sentence -- configs/judges.yaml:
+    "Reporting ASR without this is misreporting it".
+
+    Recovery rule: for each arm/seed, look in the SAME directory as the scored file for
+    summary.json, then summary_realsuite.json, and take the block from there. The summary
+    must match the scored file's arm and seed, and every summary found must carry an
+    identical block -- any disagreement is a hard failure, never a silent pick.
+    View directories (e.g. results/posthoc_stats/view_s1) satisfy this via byte copies of
+    the canonical summaries, documented in their README.
+    """
+    found = []
+    for arm, seeds in sorted(data.items()):
+        for seed, d in sorted(seeds.items()):
+            for name in ("summary.json", "summary_realsuite.json"):
+                p = d["path"].parent / name
+                if not p.is_file():
+                    continue
+                with open(p, "r", encoding="utf-8") as f:
+                    s = json.load(f)
+                if str(s.get("arm", "")).lower() != arm or int(s.get("seed", -1)) != seed:
+                    raise ValueError(
+                        f"{p}: summary arm/seed {s.get('arm')!r}/{s.get('seed')!r} does not "
+                        f"match scored file {arm}_seed{seed}")
+                amp = s.get("asr_measurement_properties")
+                if amp:
+                    found.append((f"{arm}_seed{seed}/{name}", amp))
+                    break
+    if not found:
+        return None
+    ref_src, ref = found[0]
+    for src, amp in found[1:]:
+        if amp != ref:
+            raise RuntimeError(
+                "asr_measurement_properties differs between summaries -- arms were not "
+                f"scored under one pin: {src} != {ref_src}")
+    return ref
+
+
 def check_identical_treatment(data):
     """Every arm must have been evaluated on the same suite with the same judges.
 
@@ -459,6 +501,13 @@ def main():
              for seeds in data.values() for d in seeds.values()
              if d["header"].get("asr_measurement_properties")), None),
     }
+    # Repro-audit M2: the scored header never actually carries this block (eval_score.py
+    # writes it only into summary.json), so without the fallback the headline qualifier --
+    # mandatory per configs/judges.yaml -- was silently dropped. Same-dir summary fallback;
+    # affects ONLY the qualifier text, never a number (attenuation uses per-arm recall
+    # supplied separately).
+    if not report["asr_measurement_properties"]:
+        report["asr_measurement_properties"] = asr_measurement_properties_fallback(data)
 
     # ---------------- per-arm metrics (Table 1) and per-category ASR (Table 2) ----------
     is_attack = lambda c: c in ATTACK_CATEGORIES            # per-category tables only
