@@ -3776,3 +3776,35 @@ Artifacts: results/exploratory/frontier_figure/.
 - Housekeeping (2026-08-28): b1_seed42/README.md clarified (per-item vs whole-file
   identity, re-verified 300/300); pip_freeze.txt regenerated (matplotlib 3.11.1 added
   to the venv by exploratory analysis 6).
+
+## 2026-08-28 — Pre-lock closure 1/4: nelson2026guardrail verified against the full text; dataset attribution corrected again
+
+Owner directive: no unverified citation reaches submission. The paper itself was
+opened (not just the landing page). Metadata exact: Nelson, Wong, Silvestrini, Shin,
+Robinson, Lee, Yang, Torous, Trister; npj Digital Medicine 9:407 (2026); DOI
+10.1038/s41746-026-02579-5. All cited figures appear in the text.
+
+Finding: the 2026-08-28 step-6 correction (previous entry above) fixed the
+system-attribution but itself misattributed the datasets. Correct structure, from the
+paper's comparative-evaluation section and Table 2:
+
+- OpenAI 0.419 (95% CI 0.387–0.451; specificity 0.999), NVIDIA 0.759, and VMHG 0.990
+  (95% CI 0.981–0.995) are ALL on the same clinician-labelled Verily Mental Health
+  Crisis Dataset v1.0 (n=1800). Same-dataset, like-for-like — there is no
+  "cross-dataset caveat" on the headline contrast, contrary to the previous entry.
+- The paper's external evaluation is the NVIDIA Aegis 2.0 suicide/self-harm subset
+  (n=794): OpenAI 0.882, NVIDIA 0.907, VMHG 0.982 (VMHG higher, p < 0.001).
+
+Consequence for our citation: stronger but narrower. Stronger — 0.419 vs 0.990 cannot
+be discounted as domain shift. Narrower — OpenAI's sensitivity rises from 0.419 on
+naturalistic crisis conversations to 0.882 on explicit self-harm content, so the
+miss-rate is regime-specific, which independently corroborates our
+classifier-blindness *mechanism* (content-light behavioural breaches evade content
+classifiers) rather than a blanket "moderation misses 58%" claim. Paper prose must
+cite it with that scope.
+
+Corrected: references.bib note field (rewritten); related_work.md second dated
+correction appended (both prior annotations left unedited, append-only). No pinned
+artifact touched; no amendment — this is a citation-record correction, not a
+methods change, so no lock re-issue is triggered. nelson2026guardrail is not yet
+cited in any paper/*.tex prose (checked), so no LaTeX carries the stale framing.

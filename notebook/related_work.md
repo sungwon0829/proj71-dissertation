@@ -2759,3 +2759,31 @@ general-purpose bolt-on guardrails miss the majority of psychiatric-crisis conte
 a purpose-built system catches, consistent with the classifier-blindness exhibit. Any
 use in the paper must cite the corrected framing; the addendum's original sentence is
 left unedited above per append-only convention.
+
+### Second correction (2026-08-28, full-text verification): the dataset attribution above is also wrong
+
+Closure-item verification opened the paper itself rather than the article landing page.
+Metadata is exact (Nelson, Wong, Silvestrini, Shin, Robinson, Lee, Yang, Torous,
+Trister; npj Digital Medicine 9:407, 2026; DOI 10.1038/s41746-026-02579-5) and all
+cited figures appear in the text. But the correction above placed 0.419/0.759 "on an
+external dataset" and 0.990 "on internal data". The paper's actual structure, per its
+comparative-evaluation text and Table 2 ("Performance of safety guardrail models on
+overall crisis detection for Verily and NVIDIA datasets"):
+
+- **All three sensitivities are on the SAME dataset** — the clinician-labelled Verily
+  Mental Health Crisis Dataset v1.0 (n=1800): OpenAI 0.419 (95% CI 0.387–0.451;
+  specificity 0.999), NVIDIA 0.759, VMHG 0.990 (95% CI 0.981–0.995). A like-for-like
+  comparison; the "cross-dataset caveat" claimed above does not exist for these numbers.
+- The paper's genuinely external evaluation is the NVIDIA Aegis 2.0 suicide/self-harm
+  subset (n=794), where the gap narrows: OpenAI 0.882, NVIDIA 0.907, VMHG 0.982
+  (all p < 0.001 vs VMHG).
+
+Net effect on our use of the citation: **stronger, but narrower.** Stronger, because
+the 0.419-vs-0.990 contrast is same-dataset and cannot be discounted as a domain-shift
+artifact. Narrower, because the external-subset numbers show the general-purpose
+guardrails perform far better on explicit self-harm content (OpenAI 0.882) than on
+naturalistic crisis conversations (0.419) — i.e., the miss-rate is regime-specific,
+which is precisely this project's classifier-blindness mechanism (content-light,
+behavioural breaches evade content classifiers). Cite with that scope; do not quote
+0.419 as a general moderation miss-rate. references.bib note field updated to match;
+both prior annotations left unedited above per append-only convention.
