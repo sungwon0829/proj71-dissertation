@@ -3837,3 +3837,43 @@ appears in artifact headers as recorded provenance only; the enforced pin is the
 file's sha, which is `-text`-protected). On a Linux clone (autocrlf off) the .sh files
 materialise as the LF blob form, which bash requires there. Clone retained in the
 session scratchpad; nothing in it was modified.
+
+## 2026-08-28 — Pre-lock closure 3/4: results manifest generated and adversarially verified
+
+Owner directive: one machine-readable file mapping every table cell and figure ->
+source artifact -> config -> seed -> data hash -> git commit, plus a one-page
+human-readable appendix version. Built scripts/make_results_manifest.py (pure read,
+deterministic, fail-loud); outputs notebook/results_manifest.json and
+notebook/results_manifest.md — in notebook/ because results/ is never committed and
+the manifest is precisely the committed integrity record for what lives there.
+
+Coverage: 18 sources, 37 exhibits — all 15 Table 1 cells + the T_ctrl row, all four
+Table 2 category cells + both decomposition blocks, primary test, crisis co-primary,
+over-refusal bound (Rev 7 descriptive stance), TOST equivalence bound, explicit sign
+convention, headline sentence + recall qualifier, Amendment 23 panel + per-seed
+reports, frontier figure (all five files incl. producing script), and the five
+Amendment 24 exploratory analyses (per-file sha maps). Every value read LIVE from the
+artifact at generation time; every source chain runs scored -> generations -> config
+with byte hashes verified in transit (generations_sha256 recomputed, suite pin and
+lock v5 pin asserted before writing anything).
+
+Verification: three-agent adversarial workflow. (1) Hash/path sweep: 74 checks, zero
+mismatches. (2) Value fidelity: 169 checks manifest->artifact, zero discrepancies;
+coverage artifact->manifest found one major gap (table2_decomposition.t block absent)
+and two minors (n_boot/seed params dropped from table2 cells; frontier script/report
+unpinned). (3) MD audit: consistent with JSON, three minor framing omissions (b2's
+hand-label instrument, sign-convention statement, T_ctrl's Amendment 9 qualifier).
+All six findings fixed in the generator; regenerated; targeted re-checks all pass
+(decomposition.t deep-equal, params present, frontier dir pinned wholesale =
+on-disk listing, full hash re-sweep clean, MD carries all three additions).
+
+My own first draft had four defects the fail-loud rewrite caught before the workflow
+ran: TOST and crisis co-primary silently skipped by soft key lookups, stats.primary
+capturing metadata scalars instead of diff/CI/p, t_ctrl row grabbing prose. All four
+would have shipped a manifest that looked complete and wasn't; recorded here because
+the fix (hard key access, no fallbacks) is the convention the generator now follows.
+
+NOTE: the manifest records git_head at generation time (13cf884) — the tree the
+artifacts were verified under; the manifest's own commit necessarily postdates it.
+It must be REGENERATED after the ratio-ablation exhibit lands and before RESULTS
+LOCK, so the lock-time manifest includes the ablation and a lock-adjacent git_head.
