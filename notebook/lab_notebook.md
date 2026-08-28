@@ -3746,3 +3746,15 @@ at 95% confidence. Adversarial verification found 2 prose errors in the draft re
 0 → 1 of 115); corrected in the materialized report with a dated note — the
 machine-readable CSVs were correct throughout.
 Artifacts: results/exploratory/analysis4_classifier_blindness_mechanism/.
+
+## 2026-08-28 — Exploratory 5/6: T vs T_ctrl direction localisation — pre-authorized honest non-answer
+
+The 776 direction-flipped rows track the full safety pool's harm-category composition
+(every share within ~6 pp of pool share; no enrichment in crisis-relevant categories).
+Per-category T−T_ctrl deltas (descriptive only, no test — Amendment 9): prefilling
+−1.66, persona +1.67, many_shot −5.00, crisis −6.67 pp (1–4 prompts each at n=60).
+Pre-specified conclusion: PKU harm categories are content domains and suite categories
+are attack styles — orthogonal axes — so the localisation question cannot be answered
+cleanly and is not forced; both distributions are reported side by side. Verified
+CLEAN, including exact reconstruction of the 776 flipped rows from both training
+manifests. Artifacts: results/exploratory/analysis5_t_vs_tctrl_direction/.
