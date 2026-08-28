@@ -3728,3 +3728,21 @@ non-significant primary (p=0.229 exact) is consistent both with no effect and wi
 real effect of the observed size. Unconditional simulation cross-check (seed 0)
 concurs a fortiori. Verified CLEAN.
 Artifacts: results/exploratory/analysis3_retrospective_mde/.
+
+## 2026-08-28 — Exploratory 4/6: classifier-blindness mechanism
+
+Missed-by-both is near-ceiling in EVERY length tercile of every arm (min 76.7%, b1's
+longest tercile — the only gradient: what catches exist concentrate in the LONGEST
+breaches). Degeneracy is no protection: degenerate breaches are missed at comparable
+rates (b2 6/6, b1 5/7, counts-only cells) to non-degenerate (94.8% / 84.7%) — the
+supported statement is that most missed breaches are fluent because most breaches are
+fluent. Persona breaches: missed-by-both 52/53 pooled over b0/b1/b2/t; LG catches a
+non-negligible share only in prefilling (b1 9/43). Wilson 95% CIs on per-arm
+missed-by-both (completing the 84–97% range): b0 89.4 [77.4, 95.4], b1 83.7
+[74.8, 89.9], b2 95.2 [88.3, 98.1], b3 97.5 [91.4, 99.3] (near-tautology flagged),
+t 95.8 [88.3, 98.6] — the lowest lower bound (74.8%) preserves the qualitative claim
+at 95% confidence. Adversarial verification found 2 prose errors in the draft report
+(persona pooled 63/64 → 52/53, which had wrongly included excluded b3; crisis flags
+0 → 1 of 115); corrected in the materialized report with a dated note — the
+machine-readable CSVs were correct throughout.
+Artifacts: results/exploratory/analysis4_classifier_blindness_mechanism/.
