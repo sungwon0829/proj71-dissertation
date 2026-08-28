@@ -3523,3 +3523,174 @@ direction effect (−1.7 primary, −6.7 crisis, T minus T_ctrl) — stated with
 per Amendment 9. The Amendment 22.2 unresolved-confound sentence for the Discussion is
 now replaced by this bounded statement. ‡ judge cross-check only (κ≈0.075); no hand
 labels exist for this control arm, as pre-registered.
+
+## 2026-08-28 — Amendment 24.2 ratio-ablation chain (T_r050 → gen → T_r200 → gen → score both) LAUNCHED, seed 1
+
+**Trigger:** `notebook/preregistration_amendments.md` Amendment 24.2 (dated 2026-08-28,
+commit `92c3ebb`, lock v5) — post-hoc exploratory safety-pair ratio ablation, owner-
+reinstated per CLAUDE.md's "ablations (reinstated only if a week finishes early)"
+exception. **Produces:** exploratory-only dose-response points for the ASR-primary +
+crisis exhibit (0%=B2, 50%=T_r050, 100%=T, target-200%/achieved-100%=T_r200). Never
+Table 1/2, never the headline sentence, never used to evaluate the pre-registered
+10-point threshold (Amendment 24 header).
+
+**Governance verification, done before writing anything:**
+- Amendment 24.2 text confirmed present in `notebook/preregistration_amendments.md`
+  (§"24.2 Safety-pair ratio ablation (GPU, exploratory arms T_r050 / T_r200)"), committed
+  at `92c3ebb` ("Amendment 24: six pre-specified post-hoc exploratory analyses + ratio
+  ablation; lock v5") — matches the task brief's citation.
+- `configs/judges.yaml` → `pin_lock_file: configs/judges_pinned.lock.v5.json`,
+  `pin_lock_sha256: f01e4e1ac1819f76ed25c07e416753a66d8916876c14a2d071b9c470af22d745`.
+  Independently recomputed via `certutil -hashfile configs/judges_pinned.lock.v5.json
+  SHA256` → **matches exactly**. Ran `eval_score.verify_judge_pin()` directly →
+  `status: VERIFIED`, `pin_status: PINNED`, `preregistration_amendments_in_force`
+  includes `"24"`. Lock v5 is genuinely in force, not merely asserted by the task text.
+
+**Pool size and achieved ratios (Task item 1):**
+- `data/processed/pref_safety.jsonl`: **4,924 lines** (`wc -l`).
+- `results/T_dpo_seed1/dpo_data_manifest.json`: `n_safety_sampled: 4924`,
+  `safety_funnel.n_final_safety_contrast_pairs_M: 4924` — T already trains on **100% of
+  the filtered pool**. The pool is fixed by a category/keyword relevance filter over the
+  full 73,907-row raw PKU-SafeRLHF set (`prepare_pref.py::_select_safety_contrast_rows`,
+  no seed dependence), so it cannot be enlarged by resampling.
+- **T_r050**: target 50% → 2,462 (exact: 4924 × 0.5). Achievable in full.
+  `n_helpful_sample = 19,924 − 2,462 = 17,462`. Total = 19,924. **Achieved ratio: 50.00%.**
+- **T_r200**: target 200% → 9,848. **Pool cannot supply it** (only 4,924 rows exist total,
+  and `train_dpo.py` hard-fails — `"Safety pool after length-filter has only {n} rows,
+  need {n_safety_needed}."` — if `n_safety_sample` exceeds the pool). Per Amendment 24.2's
+  pre-fixed contingency ("if the filtered safety pool cannot supply 200%, the high arm
+  uses the full pool and the achieved ratio is computed and recorded at launch, before any
+  result exists — the rule decides, not the results"), `configs/dpo_t_r200.yaml` is set to
+  the full pool: `n_safety_sample = 4,924`, `n_helpful_sample = 15,000`. Total = 19,924.
+  **Achieved ratio: 100.00%, NOT 200%.**
+  **Material consequence, flagged before any result exists:** at `n_safety_sample=4,924`
+  (full pool, taken deterministically via `list(safety_pool)`, no sampling, regardless of
+  seed) and `n_helpful_sample=15,000` with the **same seed (1)** as T, T_r200's sampled
+  training data is expected **byte-identical to T seed 1's** — `train_dpo.py`'s helpful
+  sampling is `random.Random(seed).sample(helpful_pool, n_helpful_needed)` over the same
+  pool with the same seed, and the safety pool is used in full without sampling either way.
+  T_r200 as launched is therefore expected to reproduce T seed 1 rather than add a genuine
+  200% dose point. This will be checked directly by diffing
+  `results/T_r200_dpo_seed1/dpo_data_manifest.json`'s `sampled_data_sha256` against
+  `results/T_dpo_seed1/dpo_data_manifest.json`'s once T_r200 finishes training, and reported
+  in the exploratory exhibit as **"100% (duplicate of T)"**, not "200%" — per Amendment
+  24.2's own instruction to report whatever the pattern is, including a degenerate one.
+  Both configs' header comments state this explicitly (see `configs/dpo_t_r200.yaml`).
+
+**Script gap found and fixed (Task item 2's "verify the sibling assertion... before
+relying on it"):** `scripts/train_dpo.py`'s `assert_hyperparams_match_sibling()` /
+`_other_config_paths()` hard-codes `_ALL_DPO_CONFIG_BASENAMES = ("dpo_b2.yaml",
+"dpo_t.yaml", "dpo_t_ctrl.yaml")` and its arm-name gate is
+`if arm_name not in ("B2", "T", "T_ctrl")`. Neither recognises `dpo_t_r050.yaml` /
+`dpo_t_r200.yaml` or arm labels `T_r050`/`T_r200` — running either new config unmodified
+would hard-fail at `_other_config_paths()` ("Cannot determine sibling configs for...")
+before any training started. **Fixed** by extending (not loosening) the script:
+- Added `_RATIO_ABLATION_BASENAMES = ("dpo_t_r050.yaml", "dpo_t_r200.yaml")` and
+  `_RATIO_ABLATION_ARM_NAMES = ("T_r050", "T_r200")`.
+- `_other_config_paths()` now returns `[dpo_t.yaml]` (one-sided, not the full trio) for
+  either ratio-ablation basename — matching Amendment 24.2's literal scope ("byte-identical
+  to `configs/dpo_t.yaml` except ..."), rather than forcing an unwanted three-way compare
+  against B2/T_ctrl that the amendment never asked for.
+  `_SIBLING_ALLOWED_TO_DIFFER` (output_dir_template, n_helpful_sample, n_safety_sample,
+  arm, safety_direction) is **unchanged** — the same four/five fields Amendment 24.2
+  permits were already exactly what the trio's existing allow-list covers.
+- The arm-name gate now accepts `"B2", "T", "T_ctrl"` plus `_RATIO_ABLATION_ARM_NAMES`.
+- **This is a script change, not an adapter-hyperparameter change** — no LoRA/DPO
+  hyperparameter was touched, so CLAUDE.md's "must change for all arms" rule does not
+  apply; logged here per the coding-conventions "log every run"/change-visibility norm
+  regardless. **Regression-checked**: re-ran `assert_hyperparams_match_sibling()` against
+  `dpo_b2.yaml`/`dpo_t.yaml`/`dpo_t_ctrl.yaml` after the edit — all three still PASS
+  against each other exactly as before (verified interactively, not assumed).
+
+**Configs created (Task item 2):**
+- `configs/dpo_t_r050.yaml` — sha256
+  `bb97fc539e7a2c1e8c83f43ebeb2af3f787514c37a2421f2cc6ff56077721941`.
+- `configs/dpo_t_r200.yaml` — sha256
+  `1cf8b4dbfdddb14ebc2932f8fc12bfacfd0981cdf9e20976fb681cd0017db39f`.
+- Both derived from `configs/dpo_t.yaml` (sha256
+  `97873348d5d9e16ed5499b8e0a8ddb00a3a32da071a8d44a34824fcdb3aa95cb`, captured immediately
+  before writing the siblings) by changing **only** `data.arm`, `data.n_helpful_sample`,
+  `data.n_safety_sample`, `training.output_dir_template` — every other field, including
+  `data.safety_direction` (`safer`, identical to T — this ablation varies safety-pair
+  *quantity*, not *direction*; T_ctrl already covers direction) and the full LoRA block
+  (r=32/alpha=64/dropout=0.05, all attn+MLP projections), is byte-identical to `dpo_t.yaml`.
+- **Verified interactively, not assumed**, by importing `scripts/train_dpo.py` and calling
+  its real functions against both new configs (no GPU/model load needed for these checks):
+  `assert_hyperparams_match_sibling()` → **PASSED** against `dpo_t.yaml` for both;
+  `assert_lora_matches_b1_template()` → **PASSED** for both (matches
+  `configs/sft_lora.yaml`'s `lora:` block, the fixed B1 template shared by every arm);
+  arm-name gate accepts `T_r050`/`T_r200`; `n_helpful_sample + n_safety_sample == 19,924`
+  for both (17,462+2,462 and 15,000+4,924).
+
+**Chain script (Task item 3):** `scripts/run_ratio_ablation_chain.sh`, modelled on
+`scripts/run_t_ctrl_chain.sh`'s preflight/run_stage/status-file pattern (same
+`chain_status.json` schema — `chain`, `amendment`, `label`, `stages{start,end,exit_code,
+note}`, `last_updated`). Six gated stages, each depending on the previous one exiting 0
+(Amendment 12's defect-only relaunch rule — a failed stage is reported
+attempted-and-incomplete, never auto-retried, never relaunched for an unwelcome number):
+`gpu_wait → preflight → train_t_r050 → gen_t_r050 → train_t_r200 → gen_t_r200 →
+score_t_r050 → score_t_r200`. Preflight hard-checks: Amendment 24.2 heading present;
+`judges.yaml` pinned to lock v5 (`f01e4e1a...`); both new configs' sha256 match the
+pre-launch-verified values above (drift aborts rather than trains on an edited config);
+`results/B1_sft_seed42_v2/checkpoint-290` present; **no output-path collision** —
+confirmed none of `results/T_r050_dpo_seed1`, `results/T_r200_dpo_seed1`,
+`results/t_r050_seed42`, `results/t_r200_seed42` pre-existed (checked directly via `ls
+results/` before launch — absent — and re-asserted by the script's own preflight, which
+PASSED). Generation uses `--arm t_r050`/`--arm t_r200`, writing to
+`results/t_r050_seed42/generations.jsonl` / `results/t_r200_seed42/generations.jsonl` via
+`configs/eval_generation.yaml`'s pinned `dir_template: "results/{arm}_seed{seed}"` — no
+script change needed there (`eval_generate.py`/`eval_score.py` take the arm label as a
+free-form string with no hard-coded whitelist, unlike `train_dpo.py`). Scoring passes no
+`--over_refusal_labels` (neither arm has hand labels — Revision 4 covers B3/T seed 1
+only), so over-refusal for both is judge-cross-check-only (κ≈0.074) and marked
+`is_paper_number: False` for that column, same treatment as `t_ctrl`.
+
+**GPU check (Task item 4):** `nvidia-smi` immediately before launch: **2 MiB / 97,887 MiB
+used, 0% util, no running processes** — the T_ctrl chain had already finished (see prior
+entry), GPU was free, no wait needed. A `gpu_wait` stage (poll 60s, proceed once
+`memory.used < 10,240 MiB`) is built into the chain script regardless, per the task's
+explicit requirement, and fired trivially (`2 MiB < 10 GiB → proceeding` at the first
+poll).
+
+**Pre-launch checks (Task item 5):**
+- Pool size + achieved ratios: as above (4,924 pool; T_r050 50.00% exact; T_r200 100.00%
+  achieved vs 200% target, contingency fired).
+- Config shas: as above (dpo_t_r050.yaml, dpo_t_r200.yaml, and the dpo_t.yaml parent they
+  were diffed against).
+- Disk: `df -h` → `C:` 741 GB avail / 893 GB total (18% used), `D:` 608 GB avail / 894 GB
+  total (32% used, holds the HF model cache) — ample for two more ~1 GB LoRA adapters plus
+  optimizer state, comparable to every prior B2/T/T_ctrl run's footprint.
+- ETA: T seed 1's own `train_runtime` was 6,514.2 s (1.81 h); B2 v4 was 7,233.2 s (2.01 h);
+  T_ctrl (same 19,924-pair/1-epoch/2×8 config family) took 2h37m wall including
+  gen+score overhead. Total pair count is invariant at 19,924 for both ratio-ablation arms
+  (matched volume, only the helpful/safety split changes), so per-arm training wall-clock
+  is expected in the same **~1.8–2.1 h** band. Generation: ~10–12 min/arm (most recent
+  B2/T regen pass). Scoring (no hand labels, judge cross-check only): ~7–25 min/arm (T_ctrl
+  precedent's conservative upper bound). **Chain ETA: ~4.5–5.5 h from launch**, i.e.
+  substantially complete by **~17:30–18:30Z on 2026-08-28** (launch 12:02:44Z below).
+
+**Launch:** `nohup bash scripts/run_ratio_ablation_chain.sh >
+results/ratio_ablation_chain/nohup.log 2>&1 & disown`, single foreground Bash call — never
+`run_in_background` (the ~60-minute kill trap), matching `run_t_ctrl_chain.sh`/
+`run_seeds23_overnight.sh` project convention. Chain start **2026-08-28T12:02:44Z**;
+`gpu_wait` and `preflight` both passed at `12:02:45Z`; `train_t_r050` stage started the
+same second. **Process tree confirmed alive** ~2 minutes after launch: outer `bash
+run_ratio_ablation_chain.sh` (PID 11) → nested venv `python.exe` (PID 19136, launch
+21:02:45 local) — process present and unchanged across three separate `ps aux` checks
+spanning ~2 minutes, and GPU memory rose from 2 MiB to **553 MiB** over that window
+(consistent with the CPU-bound helpful/safety pool construction + tokenization phase
+before the ~15 GB model load, matching T seed 1's and T_ctrl's own reference logs — no
+crash, no early exit). `results/T_r050_dpo_seed1/` exists (created by `train_dpo.py`'s
+`os.makedirs`). `train_t_r050.log` is 0 bytes at last check — expected: Python's default
+block-buffering on a non-TTY stdout redirect, same as every other detached run in this
+project (T_ctrl's own launch entry notes the identical symptom); not a sign of failure.
+`chain_status.json`: `gpu_wait: 0`, `preflight: 0`, `train_t_r050: running`.
+
+**Anomalies:** the `_other_config_paths()`/arm-gate hard-coding gap in `scripts/
+train_dpo.py`, described above — a genuine pre-launch blocker, not a config error, fixed
+by a scoped extension and regression-checked before any config was launched against it.
+No other anomalies. Will append a completion entry (per-arm final loss, wall-clock,
+`sampled_data_sha256` identity check for T_r200 vs T, and the dose-response table) once
+the chain finishes; a failed/incomplete stage will be reported as
+attempted-and-incomplete per Amendment 12, not silently retried or relaunched for an
+unwelcome number.

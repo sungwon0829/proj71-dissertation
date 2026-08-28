@@ -1,0 +1,127 @@
+# Project 71 — T_r200 config (Amendment 24.2 post-hoc exploratory ratio-ablation arm:
+# target 200% of T's safety-pair count, seed 1 only).
+#
+# *** POOL-CAP CONTINGENCY FIRED (recorded here AND in notebook/lab_notebook.md at launch,
+# before any result exists, per Amendment 24.2's pre-fixed rule: "if the filtered safety
+# pool cannot supply 200% (9,848 rows), the high arm uses the full pool and the achieved
+# ratio is computed and recorded at launch. The rule decides, not the results.") ***
+# data/processed/pref_safety.jsonl and every T/T_ctrl safety_funnel.n_final_safety_contrast_
+# pairs_M report the SAME fixed filtered-pool size: 4,924 rows (category/keyword filter over
+# the full PKU-SafeRLHF harmlessness split; NOT seed-dependent -- T already trains on ALL
+# 4,924 of them, i.e. 100% of the pool). 200% would require 9,848 rows; the pool has 4,924.
+# scripts/train_dpo.py hard-fails
+# ("Safety pool after length-filter has only {n} rows, need {n_safety_needed}.") if
+# n_safety_sample exceeds the pool, so this config is set to the ACHIEVABLE value: the FULL
+# pool, 4,924 rows. Achieved ratio = 4,924 / 4,924 = 100.00% -- NOT 200%.
+#
+# CONSEQUENCE, stated plainly rather than discovered later: at n_safety_sample=4,924 and
+# n_helpful_sample=15,000 (both identical to dpo_t.yaml) with the SAME seed (1), this
+# config's sampled training data is expected to be IDENTICAL to T seed 1's -- the safety
+# pool is used in full deterministically (list(safety_pool), no sampling, regardless of
+# seed) and the helpful sample is drawn by random.Random(seed).sample() over the same pool
+# with the same seed, so T_r200 as launched reproduces T seed 1 rather than adding a new
+# 200% dose point. This is checked directly: this run's dpo_data_manifest.json
+# sampled_data_sha256 is compared against results/T_dpo_seed1/dpo_data_manifest.json's at
+# launch time and the match/mismatch is recorded before scoring. Reported in the dose-
+# response exhibit as "100% (duplicate of T)" rather than "200%" -- per Amendment 24.2's
+# instruction to report whatever the pattern is, including a degenerate one.
+#
+# Derived from configs/dpo_t.yaml (sha256 97873348d5d9e16ed5499b8e0a8ddb00a3a32da071a8d44a34824fcdb3aa95cb,
+# captured 2026-08-28 immediately before this file was written) by changing ONLY the four
+# fields Amendment 24.2 permits / scripts/train_dpo.py's _SIBLING_ALLOWED_TO_DIFFER already
+# allows to differ across the {B2, T, T_ctrl} trio: data.arm, data.n_helpful_sample,
+# data.n_safety_sample, training.output_dir_template. Every other model/base_adapter/lora/
+# training field, and the data.{max_length, max_length_policy, exclude_safety_inversions,
+# chat_template_path, system_prompt_file, helpful_pool_source} keys, are byte-identical to
+# dpo_t.yaml, including data.safety_direction (stays "safer", identical to T).
+# scripts/train_dpo.py's assert_hyperparams_match_sibling() checks this config against
+# dpo_t.yaml ONLY (not the full B2/T_ctrl trio) via a small extension added 2026-08-28 for
+# this amendment -- see that script's _RATIO_ABLATION_BASENAMES comment.
+#
+# MATCHED DATA VOLUME (Methodological Safeguards v2, rule 2), preserved per Amendment 24.2:
+# total pairs fixed at T's 19,924.
+#   filtered safety pool size = 4,924 (fixed; see contingency note above)
+#   M (safety pairs, this config)      = 4,924  (= 100% of the pool -- the achievable cap)
+#   N (helpfulness pairs, this config) = 19,924 - 4,924 = 15,000
+#   T_r200 total                       = N + M = 19,924  (matches T's total exactly)
+#
+# Hyperparameters: byte-identical to dpo_b2.yaml / dpo_t.yaml / dpo_t_ctrl.yaml / dpo_t_r050.yaml,
+# asserted at startup, not just documented. If you ever have a reason to change an adapter
+# hyperparameter, it must change for B1, B2, T, T_ctrl AND both ratio-ablation arms, and the
+# change must be stated explicitly in notebook/lab_notebook.md.
+
+model:
+  name_or_path: Qwen/Qwen2.5-7B-Instruct
+  cache_dir: D:/hf_cache/hub   # NOTE: cache_dir is the hub-format root, not HF_HOME -- see sft_lora.yaml
+  dtype: bfloat16
+  attn_implementation: sdpa    # never flash-attn on Blackwell (unsettled per CLAUDE.md)
+  trust_remote_code: false
+
+base_adapter:
+  b1_output_dir: results/B1_sft_seed42_v2
+  b1_checkpoint: checkpoint-290
+
+data:
+  arm: T_r200   # identity label; allowed to differ across configs by design (see
+                # assert_hyperparams_match_sibling / _RATIO_ABLATION_BASENAMES in
+                # scripts/train_dpo.py)
+  helpful_pool_source: psychocounsel_pref
+  safety_pairs_file: data/processed/pref_safety.jsonl   # NOT read -- see dpo_t.yaml note;
+                                                          # built in-memory by
+                                                          # prepare_pref.build_safety_pairs().
+  safety_direction: safer   # IDENTICAL to T.
+  chat_template_path: configs/qwen25_chat_template_generation.jinja
+  system_prompt_file: configs/system_prompt.txt
+
+  exclude_safety_inversions: true
+
+  max_length_policy: exclude
+  max_length: 2048
+
+  # MATCHED DATA VOLUME sampling target for this arm (see header comment). Total = 19,924,
+  # identical to T/B2/T_ctrl. n_safety_sample is the POOL-CAPPED achievable value (4,924,
+  # i.e. 100% of the pool), NOT the nominal 200% target (9,848) -- see contingency note above.
+  n_helpful_sample: 15000
+  n_safety_sample: 4924   # pool-capped: 100.00% of the 4,924-row filtered safety pool
+                           # (target was 9,848 / 200%; pool cannot supply it -- Amendment 24.2
+                           # contingency)
+
+lora:
+  r: 32
+  alpha: 64
+  dropout: 0.05
+  target_modules: [q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj]
+  bias: none
+  task_type: CAUSAL_LM
+
+training:
+  output_dir_template: "results/T_r200_dpo_seed{seed}"
+  num_train_epochs: 1
+  per_device_train_batch_size: 2
+  gradient_accumulation_steps: 8   # effective batch = 2 x 8 = 16
+  learning_rate: 5.0e-6
+  lr_scheduler_type: cosine
+  warmup_ratio: 0.03
+  optim: adamw_torch          # plain torch AdamW -- no bitsandbytes on native Windows
+  weight_decay: 0.0
+  max_grad_norm: 1.0
+  beta: 0.1
+  loss_type: [sigmoid, sft]
+  loss_weights: [1.0, 1.0]
+  label_smoothing: 0.0
+  disable_dropout: true
+  precompute_ref_log_probs: true
+  precompute_ref_batch_size: 8
+  # NO seed field here, deliberately -- see dpo_t.yaml's comment for the full reasoning.
+  # --seed on the command line is the sole source of truth. T_r200 is seed 1 only
+  # (Amendment 24.2); the resolved seed is written into
+  # results/T_r200_dpo_seed<seed>/dpo_data_manifest.json.
+  bf16: true
+  gradient_checkpointing: true
+  gradient_checkpointing_kwargs:
+    use_reentrant: false
+  dataloader_num_workers: 2
+  logging_steps: 5
+  save_strategy: epoch
+  report_to: []
+  train_sampling_strategy: random   # explicit, matches TRL's own default

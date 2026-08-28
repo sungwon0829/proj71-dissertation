@@ -146,17 +146,34 @@ _SIBLING_DATA_KEYS_MUST_MATCH = [
 ]
 _ALL_DPO_CONFIG_BASENAMES = ("dpo_b2.yaml", "dpo_t.yaml", "dpo_t_ctrl.yaml")
 
+# Amendment 24.2 (2026-08-28, notebook/preregistration_amendments.md, post-hoc exploratory
+# safety-pair ratio ablation): dpo_t_r050.yaml / dpo_t_r200.yaml are NOT members of the
+# {B2, T, T_ctrl} trio above -- they are declared "byte-identical to configs/dpo_t.yaml
+# except n_safety_sample/n_helpful_sample/arm/output_dir_template", which is exactly the
+# _SIBLING_ALLOWED_TO_DIFFER set already enforced for the trio. Rather than widening the
+# trio (which would force these two into the B2/T_ctrl pairwise checks the amendment never
+# asked for), they get their own one-sided check against dpo_t.yaml only. Added here,
+# 2026-08-28, by the train-runner agent executing Amendment 24.2 -- not a hyperparameter
+# change, so the CLAUDE.md "changed for all arms" rule does not apply; logged in
+# notebook/lab_notebook.md regardless, per the coding-conventions "log every run" rule.
+_RATIO_ABLATION_BASENAMES = ("dpo_t_r050.yaml", "dpo_t_r200.yaml")
+_RATIO_ABLATION_ARM_NAMES = ("T_r050", "T_r200")
+
 
 def _other_config_paths(this_config_path: str) -> list:
     """Returns the paths of the other two configs in the {B2, T, T_ctrl} trio, in the same
-    directory as this_config_path."""
+    directory as this_config_path -- OR, for an Amendment 24.2 ratio-ablation config
+    (dpo_t_r050.yaml / dpo_t_r200.yaml), the single-element list [dpo_t.yaml], since those
+    two are asserted against T only, not the full trio."""
     directory = os.path.dirname(this_config_path)
     this_base = os.path.basename(this_config_path).lower()
+    if this_base in (b.lower() for b in _RATIO_ABLATION_BASENAMES):
+        return [os.path.join(directory, "dpo_t.yaml")]
     if this_base not in _ALL_DPO_CONFIG_BASENAMES:
         raise RuntimeError(
             f"Cannot determine sibling configs for {this_config_path!r} -- expected one of "
-            f"{_ALL_DPO_CONFIG_BASENAMES}. Refusing to skip the hyperparameter-match "
-            "assertion silently."
+            f"{_ALL_DPO_CONFIG_BASENAMES + _RATIO_ABLATION_BASENAMES}. Refusing to skip the "
+            "hyperparameter-match assertion silently."
         )
     return [os.path.join(directory, b) for b in _ALL_DPO_CONFIG_BASENAMES if b != this_base]
 
@@ -539,10 +556,10 @@ def main():
     assert_no_config_seed(t_cfg, args.config)
 
     arm_name = d_cfg.get("arm")
-    if arm_name not in ("B2", "T", "T_ctrl"):
+    if arm_name not in ("B2", "T", "T_ctrl") + _RATIO_ABLATION_ARM_NAMES:
         raise RuntimeError(
-            f"data.arm must be one of B2/T/T_ctrl in {args.config}, got {arm_name!r}. "
-            "Refusing to infer the arm implicitly."
+            f"data.arm must be one of B2/T/T_ctrl/{'/'.join(_RATIO_ABLATION_ARM_NAMES)} "
+            f"in {args.config}, got {arm_name!r}. Refusing to infer the arm implicitly."
         )
     output_dir = args.output_dir if args.output_dir is not None else t_cfg["output_dir_template"].format(seed=seed)
     if os.path.isdir(output_dir):

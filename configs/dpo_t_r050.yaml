@@ -1,0 +1,120 @@
+# Project 71 — T_r050 config (Amendment 24.2 post-hoc exploratory ratio-ablation arm:
+# 50% of T's safety-pair count, seed 1 only).
+#
+# GOVERNANCE: notebook/preregistration_amendments.md, Amendment 24.2 "Safety-pair ratio
+# ablation (GPU, exploratory arms T_r050 / T_r200)", dated 2026-08-28, lock v5. Reinstates
+# the ablation CLAUDE.md otherwise cuts ("only if a week finishes early") -- owner decision,
+# recorded there, not here. EXPLORATORY ONLY: never Table 1/2, never the headline sentence,
+# never used to evaluate the pre-registered 10-point threshold (Amendment 24 header).
+#
+# Derived from configs/dpo_t.yaml (sha256 97873348d5d9e16ed5499b8e0a8ddb00a3a32da071a8d44a34824fcdb3aa95cb,
+# captured 2026-08-28 immediately before this file was written) by changing ONLY the four
+# fields Amendment 24.2 permits and scripts/train_dpo.py's _SIBLING_ALLOWED_TO_DIFFER
+# already allows to differ across the {B2, T, T_ctrl} trio: data.arm, data.n_helpful_sample,
+# data.n_safety_sample, training.output_dir_template. Every other model/base_adapter/lora/
+# training field, and the data.{max_length, max_length_policy, exclude_safety_inversions,
+# chat_template_path, system_prompt_file, helpful_pool_source} keys, are byte-identical to
+# dpo_t.yaml, including data.safety_direction (stays "safer", identical to T -- Amendment
+# 24.2 varies the AMOUNT of safety data, not its direction; T_ctrl already covers direction).
+# scripts/train_dpo.py's assert_hyperparams_match_sibling() checks this config against
+# dpo_t.yaml ONLY (not the full B2/T_ctrl trio) via a small extension added 2026-08-28 for
+# this amendment -- see that script's _RATIO_ABLATION_BASENAMES comment.
+#
+# MATCHED DATA VOLUME (Methodological Safeguards v2, rule 2), preserved per Amendment 24.2:
+# total pairs fixed at T's 19,924; the helpfulness count absorbs the difference.
+#   filtered safety pool size (data/processed/pref_safety.jsonl, and
+#     n_final_safety_contrast_pairs_M in every T/T_ctrl safety_funnel) = 4,924 (fixed, not
+#     seed-dependent -- category/keyword filter over the full PKU-SafeRLHF set).
+#   M (safety pairs, this config)   = 2,462  (= 50.00% of the 4,924-row pool, exactly)
+#   N (helpfulness pairs, this config) = 19,924 - 2,462 = 17,462
+#   T_r050 total                    = N + M = 19,924  (matches T's total exactly)
+# Achieved ratio: 2,462 / 4,924 = 50.00% -- the target ratio is exactly achievable (unlike
+# T_r200; see dpo_t_r200.yaml for the pool-cap contingency).
+#
+# Hyperparameters: byte-identical to dpo_b2.yaml / dpo_t.yaml / dpo_t_ctrl.yaml (learning_rate,
+# num_train_epochs, beta, loss_type=[sigmoid, sft], loss_weights=[1.0, 1.0], LoRA r=32/
+# alpha=64/dropout=0.05/all attn+MLP projections), asserted at startup, not just documented.
+# If you ever have a reason to change an adapter hyperparameter, it must change for B1, B2,
+# T, T_ctrl AND both ratio-ablation arms, and the change must be stated explicitly in
+# notebook/lab_notebook.md.
+#
+# Sequencing (Amendment 24.2 launch, 2026-08-28): T_r050 -> gen -> T_r200 -> gen -> score
+# both, detached serial chain, seed 1 only, on GPU confirmed idle after the T_ctrl chain.
+
+model:
+  name_or_path: Qwen/Qwen2.5-7B-Instruct
+  cache_dir: D:/hf_cache/hub   # NOTE: cache_dir is the hub-format root, not HF_HOME -- see sft_lora.yaml
+  dtype: bfloat16
+  attn_implementation: sdpa    # never flash-attn on Blackwell (unsettled per CLAUDE.md)
+  trust_remote_code: false
+
+# The B1 checkpoint this arm is built on top of -- identical to B2/T/T_ctrl. See dpo_t.yaml
+# for the full B1 v1-void / v2-retrain incident history; not repeated here.
+base_adapter:
+  b1_output_dir: results/B1_sft_seed42_v2
+  b1_checkpoint: checkpoint-290
+
+data:
+  arm: T_r050   # identity label; allowed to differ across configs by design (see
+                # assert_hyperparams_match_sibling / _RATIO_ABLATION_BASENAMES in
+                # scripts/train_dpo.py)
+  helpful_pool_source: psychocounsel_pref
+  safety_pairs_file: data/processed/pref_safety.jsonl   # NOT read -- see dpo_t.yaml note;
+                                                          # built in-memory by
+                                                          # prepare_pref.build_safety_pairs(),
+                                                          # same pool as T, sampled down to M.
+  safety_direction: safer   # IDENTICAL to T -- this arm ablates safety-pair QUANTITY, not
+                             # preference direction (direction is T_ctrl's axis, untouched
+                             # here).
+  chat_template_path: configs/qwen25_chat_template_generation.jinja
+  system_prompt_file: configs/system_prompt.txt
+
+  exclude_safety_inversions: true
+
+  max_length_policy: exclude
+  max_length: 2048
+
+  # MATCHED DATA VOLUME sampling target for this arm (see header comment). Total = 19,924,
+  # identical to T/B2/T_ctrl; only the split changes.
+  n_helpful_sample: 17462
+  n_safety_sample: 2462   # 50.00% of the 4,924-row filtered safety pool (Amendment 24.2)
+
+lora:
+  r: 32
+  alpha: 64
+  dropout: 0.05
+  target_modules: [q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj]
+  bias: none
+  task_type: CAUSAL_LM
+
+training:
+  output_dir_template: "results/T_r050_dpo_seed{seed}"
+  num_train_epochs: 1
+  per_device_train_batch_size: 2
+  gradient_accumulation_steps: 8   # effective batch = 2 x 8 = 16
+  learning_rate: 5.0e-6
+  lr_scheduler_type: cosine
+  warmup_ratio: 0.03
+  optim: adamw_torch          # plain torch AdamW -- no bitsandbytes on native Windows
+  weight_decay: 0.0
+  max_grad_norm: 1.0
+  beta: 0.1
+  loss_type: [sigmoid, sft]
+  loss_weights: [1.0, 1.0]
+  label_smoothing: 0.0
+  disable_dropout: true
+  precompute_ref_log_probs: true
+  precompute_ref_batch_size: 8
+  # NO seed field here, deliberately -- see dpo_t.yaml's comment for the full reasoning.
+  # --seed on the command line is the sole source of truth. T_r050 is seed 1 only
+  # (Amendment 24.2); the resolved seed is written into
+  # results/T_r050_dpo_seed<seed>/dpo_data_manifest.json.
+  bf16: true
+  gradient_checkpointing: true
+  gradient_checkpointing_kwargs:
+    use_reentrant: false
+  dataloader_num_workers: 2
+  logging_steps: 5
+  save_strategy: epoch
+  report_to: []
+  train_sampling_strategy: random   # explicit, matches TRL's own default
