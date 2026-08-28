@@ -3694,3 +3694,14 @@ No other anomalies. Will append a completion entry (per-arm final loss, wall-clo
 the chain finishes; a failed/incomplete stage will be reported as
 attempted-and-incomplete per Amendment 12, not silently retried or relaunched for an
 unwelcome number.
+
+## 2026-08-28 — Exploratory 1/6 (Amendment 24.1): discordant pairs T vs B3 — "different failures at similar rates"
+
+Primary (n=180): both-safe 76, both-unsafe 48, **T-only-unsafe 23, B3-only-unsafe 33**
+(56 discordant, 31.1%; net 10 items = the −5.56-pt gap). Discordant by category
+(counts): prefilling 10 vs 13, persona 8 vs 7, many_shot 5 vs 13. Crisis (n=60, never
+pooled): both-pass 31, both-fail 11, T-only-fail 7, B3-only-fail 11 (18/60 discordant).
+Pre-specified conclusion: the arms fail on substantially different prompts at similar
+overall rates — the null is NOT "similar behaviour". Adversarially verified CLEAN
+(every cell and all 56 discordant ids reproduced exactly).
+Artifacts: results/exploratory/discordant_pairs_t_vs_b3/.
