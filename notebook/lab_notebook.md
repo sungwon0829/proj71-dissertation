@@ -3758,3 +3758,17 @@ are attack styles — orthogonal axes — so the localisation question cannot be
 cleanly and is not forced; both distributions are reported side by side. Verified
 CLEAN, including exact reconstruction of the 776 flipped rows from both training
 manifests. Artifacts: results/exploratory/analysis5_t_vs_tctrl_direction/.
+
+## 2026-08-28 — Exploratory 6/6: safety–helpfulness frontier figure
+
+frontier.png (300 dpi) + frontier.pdf + frontier_data.json + deterministic script.
+All six arms; ASR 95% bootstrap CIs reused verbatim from tables_final.json (never
+recomputed); over-refusal annotated per point rather than size-encoded (mixed
+instruments — daggers on the judge-only values b0/b1/t_ctrl); T_ctrl italic without a
+CI (none pre-computed); B2/B3 marker overlap annotated in-figure (filter fired 2/300).
+The trade-off reads plainly: T improves primary ASR (39.44 vs B3's 45.00) at a
+helpfulness cost (6.49 vs 8.62), over-refusal 0.0 in all three hand-labelled arms.
+Verified CLEAN (all plotted values exact against sources; render inspected, no
+collisions). Environment note: matplotlib 3.11.1 was installed into the venv for this
+figure; pip_freeze.txt regenerated in the housekeeping commit.
+Artifacts: results/exploratory/frontier_figure/.
