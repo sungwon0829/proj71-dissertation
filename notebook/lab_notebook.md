@@ -3808,3 +3808,32 @@ correction appended (both prior annotations left unedited, append-only). No pinn
 artifact touched; no amendment — this is a citation-record correction, not a
 methods change, so no lock re-issue is triggered. nelson2026guardrail is not yet
 cited in any paper/*.tex prose (checked), so no LaTeX carries the stale framing.
+
+## 2026-08-28 — Pre-lock closure 2/4: fresh-clone reproducibility test — ALL THREE CHECKS PASS
+
+Owner directive: clone the repo into a clean directory and run the integrity checks
+from the clone, not in place. Method: `git clone c:/proj71` (local clone of HEAD
+baaff0f, verified == origin/main) into the session scratchpad, `core.autocrlf=true`
+active in the clone — the same conversion machinery a reviewer's Windows clone gets.
+
+| Check (run from inside the clone) | Result |
+|---|---|
+| Frozen-suite hash: sha256(data/redteam/redteam_suite.jsonl) | PASS — e14c3a24… byte-exact vs pin |
+| verify_judge_pin() via eval_score (REPO_ROOT asserted = clone) | VERIFIED — lock v5 sha f01e4e1a… exact; all 3 prompt hashes exact; revisions 1–7 + amendments 7a–24 recognised in force |
+| scripts/test_judge_independence.py | 15/15 passed, 0 failed |
+
+The deferred CRLF question: NOT outstanding. Amendment 15's .gitattributes (`-text` on
+all five lock files, the three judge prompts, and data/redteam/*) already closed it;
+the data/redteam rules, declared "inert" when data/ was gitignored, became active when
+the suite was committed (51f777e) and this test is the first end-to-end empirical
+confirmation that a real fresh clone checks out every hash-enforced artifact
+byte-exact. No old/new hash pairs to record because no hashes changed and no fix was
+needed; no amendment, therefore no lock re-issue.
+
+Residual sweep (sampled): scripts/*.sh, configs/judges.yaml, scripts/eval_score.py are
+CRLF in the clone AND byte-identical CRLF in the main working tree — the clone
+reproduces this machine exactly. None of these is hash-enforced (judges.yaml's sha
+appears in artifact headers as recorded provenance only; the enforced pin is the lock
+file's sha, which is `-text`-protected). On a Linux clone (autocrlf off) the .sh files
+materialise as the LF blob form, which bash requires there. Clone retained in the
+session scratchpad; nothing in it was modified.
