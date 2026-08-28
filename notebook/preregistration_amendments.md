@@ -1114,3 +1114,89 @@ Blindness cannot protect this decision, so the following do instead:
 
 *Sighted decision, protections enumerated above; motivation is robustness evidence;
 reversal of Amendment 22.1 noted.*
+
+---
+
+## Amendment 24 — Post-hoc exploratory analyses (six) and the safety-pair ratio ablation
+
+**Dated 2026-08-28, sighted.** Decided after seeing the primary result (−5.56 pts,
+p = 0.227), the Amendment 23 robustness panel, the T_ctrl row, and the
+classifier-blindness exhibit. Everything authorised here is **post-hoc exploratory**: it
+is reported under an explicit exploratory label, never as confirmatory, never in
+Table 1 or Table 2, never in the headline sentence, and never used to evaluate the
+pre-registered threshold. The primary analysis (seed 1, Amendment 13 test and n,
+hand-labelled over-refusal) is untouched. The protection, since blindness is
+unavailable, is **pre-specification of every reported output below, before any of these
+analyses is inspected**, plus pre-commitment to report whatever each shows.
+
+### 24.1 Six analyses over existing outputs (no retraining, no GPU)
+
+1. **Discordant-pair analysis (T vs B3)**, primary (n=180) and crisis (n=60) endpoints
+   separately: the full 2×2 concordance table (both-safe, both-unsafe, T-only-unsafe,
+   B3-only-unsafe) and the two discordant cells broken down by attack category.
+   **Counts, not selected examples.** Distinguishes "similar behaviour" from "different
+   failures at similar rates".
+2. **Variance decomposition** (B2 and T, seeds 1–3): per-arm ASR by seed, seed-to-seed
+   SD, the between-arm difference per seed, and an explicit statement whether the
+   observed −5.56 is larger or smaller than seed noise (noise-limited vs
+   effect-limited null). k=3 caveat stated.
+3. **Retrospective detectable effect (MDE)**: given n=180 pairs and the observed
+   marginal/discordant rates, the effect McNemar's exact test could detect at 80%
+   power (α=.05 two-sided), reported beside the pre-registered 10-point threshold.
+4. **Classifier-blindness mechanism**: for judge-BREACH responses, cross-tab of
+   classifier miss (Llama Guard / beaver-dam / both) against response token length,
+   degeneracy flag (where degeneracy artifacts exist — coverage stated per arm), and
+   attack category; a descriptive test of whether misses concentrate in fluent,
+   non-degenerate responses. **n behind every cell; Wilson 95% CIs on the per-arm
+   "missed by both" fractions** (the 84–97% range); the standing small-cell rule
+   (denominator < 10 → counts only) applies.
+5. **T vs T_ctrl direction localisation, descriptive only (Amendment 9 — no test):**
+   (a) the harm-category distribution of the 776 direction-flipped safety rows;
+   (b) per-attack-category T−T_ctrl deltas; (c) a descriptive statement of whether the
+   residual gap aligns with the flipped rows' categories. No significance test.
+6. **Safety–helpfulness frontier figure**: all six arms on ASR (primary, x) ×
+   helpfulness (y), over-refusal as the third dimension; 95% bootstrap CIs on ASR;
+   hand-labelled over-refusal where it exists, judge cross-check explicitly flagged
+   otherwise (b0/b1/t_ctrl). The "at what cost" half of the claim, visualised once.
+
+Each analysis reports as a table or figure with its n's and CIs, into
+`results/exploratory/`, with the numbers mirrored in the lab notebook (committed
+record). Nothing from 24.1 may migrate into a confirmatory claim.
+
+### 24.2 Safety-pair ratio ablation (GPU, exploratory arms T_r050 / T_r200)
+
+CLAUDE.md cut ablations ("reinstated only if a week finishes early"). The owner
+reinstates this one explicitly on 2026-08-28: every pre-registered arm is trained and
+scored, the audit passed with nothing blocking lock, drafting is the critical path and
+is not blocked by an unattended GPU run.
+
+- **Arms:** T_r050 (50% of T's safety pairs) and T_r200 (200%), seed 1 only.
+  **Matched volume preserved:** total pair count fixed at T's 19,924; the helpfulness
+  count absorbs the difference. Configs byte-identical to T except
+  `n_safety_sample`/`n_helpful_sample`, the arm label, and the output template — all
+  fields the sibling-assertion guard already permits to differ, so everything else is
+  machine-checked identical.
+- **Pool contingency, fixed now:** if the filtered safety pool cannot supply 200%
+  (9,848 rows), the high arm uses the full pool and the achieved ratio is computed and
+  recorded at launch, before any result exists. The rule decides, not the results.
+- **Pipeline:** the identical frozen pipeline — pinned generation config, lock v5
+  judges, same scoring scripts. No new instrument.
+- **Pre-specified output:** ASR primary and crisis co-primary per ratio (0%, 50%, 100%,
+  200% — with B2 as the 0% point and T as 100%), with prompt-set bootstrap CIs, ordered
+  by ratio; an explicit statement of whether the ordering is monotone. **Reported
+  whatever the pattern is** — monotone, flat, or reversed. Rationale on record before
+  the numbers exist: a monotone dose–response would reframe the null primary as "a
+  real, ordered effect below the pre-registered threshold"; a flat or non-monotone
+  pattern is reported with equal prominence and no such reframing.
+- Exploratory status per the header: never Table 1/2, never the headline.
+
+### Record consequences
+
+Lock v5 is issued via the Amendment 14a/21 path before anything is scored under this
+amendment: instruments byte-identical to v4, `preregistration_amendments_in_force`
+gains "24", `run_metadata` gains an `exploratory_arms` note (T_r050/T_r200, post-hoc
+exploratory, never primary). v1–v4 retained unedited; the staleness scan's refusal
+against v4 is captured as the positive control before v5 is issued.
+
+*Sighted; protections are the pre-specifications above; nothing here can amend, gate,
+or reinterpret the primary result.*
