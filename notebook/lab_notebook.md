@@ -3705,3 +3705,15 @@ Pre-specified conclusion: the arms fail on substantially different prompts at si
 overall rates — the null is NOT "similar behaviour". Adversarially verified CLEAN
 (every cell and all 56 discordant ids reproduced exactly).
 Artifacts: results/exploratory/discordant_pairs_t_vs_b3/.
+
+## 2026-08-28 — Exploratory 2/6: variance decomposition (B2/T, seeds 1–3)
+
+Primary T−B3 per seed: −5.56 / −3.33 / −0.56 (mean −3.15, diff SD 2.51, range 5.00);
+per-arm seed SDs: B2 2.57, B3 2.89, T 1.60. Pre-specified statement: −5.56 is ~2.2×
+the diff SD — larger than seed noise but same order — and is the most favourable of the
+three seeds; relative to the 10-pt threshold the null is **primarily effect-limited**
+(the best seed falls 4.44 pts short; the mean 6.85 pts, ~2.7× diff SD), partly
+noise-limited only in which value got observed. Crisis: T−B3 −6.67 / +15.00 / 0.00,
+diff SD 11.10 — sign flips; **noise-limited, no direction inferable**. k=3 caveat: SDs
+carry 2 df (95% CI ≈ 0.52–6.3× the estimate). Verified CLEAN.
+Artifacts: results/exploratory/variance_decomposition/.
