@@ -299,6 +299,10 @@ def main():
         "table2": table2,
         "table2_decomposition": table2_decomposition,
         "headline_sentence": report["headline_sentence"],
+        # Repro-audit M2 (2026-08-28): the qualified sentence is the reportable one --
+        # configs/judges.yaml: "Reporting ASR without this is misreporting it".
+        "headline_sentence_qualifier": report.get("headline_sentence_qualifier"),
+        "headline_sentence_full": report.get("headline_sentence_full"),
         "headline_blockers": report.get("headline_blockers"),
         "posthoc_panel_amendment23": panel,
         "posthoc_panel_notes": (
