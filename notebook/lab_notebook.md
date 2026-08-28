@@ -3502,3 +3502,24 @@ will be reported as attempted-and-incomplete, not silently retried.
 
 **Anomalies:** none beyond the sha256 transcription typo on the first (aborted, harmless)
 launch attempt, described above.
+
+## 2026-08-28 — T_ctrl chain COMPLETE (Amendment 22.2 obligation discharged)
+
+All stages exit 0 (train 2h37m, gen, score; pin v4 VERIFIED). The Revision 5 single-run
+weak control, reported in italics with NO significance test (Amendment 9):
+
+| arm | ASR primary (n=180) | crisis (n=60) | over-ref (judge x-check) | helpfulness |
+|---|---|---|---|---|
+| *t_ctrl* | *41.11%* | *36.67%* | *(23.3%)‡* | *6.451* |
+
+Per-category: prefilling 58.3%, persona 18.3%, many_shot 46.7%, crisis 36.7%.
+Reading, within Amendment 9's limits (weak control — differs from T on 776/4,924 safety
+pairs, 15.8%; bounds the preference-direction effect rather than isolating it): T_ctrl
+lands between B3 (45.0%) and T (39.4%) on the primary; on crisis it matches B2/B3
+(36.7%) where T shows 30.0%; helpfulness pays the same ~2-point cost as T (6.45 vs
+T 6.49, B2/B3 8.62). Descriptively, most of T's primary-endpoint movement appears with
+the safety-topic data regardless of preference direction, with a modest additional
+direction effect (−1.7 primary, −6.7 crisis, T minus T_ctrl) — stated without any test,
+per Amendment 9. The Amendment 22.2 unresolved-confound sentence for the Discussion is
+now replaced by this bounded statement. ‡ judge cross-check only (κ≈0.075); no hand
+labels exist for this control arm, as pre-registered.
