@@ -1200,3 +1200,63 @@ against v4 is captured as the positive control before v5 is issued.
 
 *Sighted; protections are the pre-specifications above; nothing here can amend, gate,
 or reinterpret the primary result.*
+
+## Amendment 25 — RESULTS LOCK
+
+**Date: 2026-08-29.** Owner-directed: the 2026-08-28 closure directive instructed, in
+order, (1) primary-source verification of the last unverified citation, (2) a
+fresh-clone reproducibility test, (3) a results manifest, and (4) "when the ratio
+ablation lands, report the dose–response against the pre-committed reading
+(monotonic / flat / non-monotonic), then declare RESULTS LOCK with a dated
+amendment." Items 1–3 completed and committed (baaff0f, 13cf884, 91181d4); the
+Amendment 24.2 ablation completed 2026-08-28T18:03Z and its pre-specified exhibit is
+committed (b08b8ca). This amendment is the declaration.
+
+**Preconditions, all verified before this declaration:**
+- Every pre-registered arm trained, generated and scored under the frozen suite
+  (sha e14c3a24…) and pinned judges: B0, B1, B2 (s1–3), B3 (s1–3), T (s1–3), T_ctrl.
+- Tables 1–2 final (results/tables_final/, reproduces the pinned primary report
+  bit-exact); headline sentence emitted with its mandatory recall qualifier; TOST
+  bound, sign convention, and over-refusal bound recorded.
+- Pre-lock repro audit: 0 critical findings, all 11 hash closures PASS.
+- Fresh-clone test: suite hash, verify_judge_pin (lock v5), judge-independence 15/15
+  — all pass from a clean clone.
+- references.bib: 58 entries, zero unverified (nelson2026guardrail confirmed against
+  the full text 2026-08-28, dataset attribution corrected).
+- Results manifest: notebook/results_manifest.json, adversarially verified (74 hash
+  checks, 169 value checks), regenerated under this amendment to include the ratio
+  ablation; the manifest as committed in the SAME commit as this amendment is the
+  enumerated inventory of every locked exhibit and its sha256.
+
+**What is locked.** Every exhibit enumerated in that manifest: all Table 1 cells and
+the T_ctrl row, all Table 2 cells and both decomposition blocks, the primary test
+(−5.56 pts, 95% CI [−13.89, +2.78], p = 0.227, n = 180), the crisis co-primary
+(−6.67 pts, p = 0.484, n = 60), the TOST bound, the over-refusal bound, the sign
+convention, the headline sentence with qualifier, the Amendment 23 robustness panel,
+the six Amendment 24 exploratory analyses, and the 24.2 ratio-ablation dose–response
+(strictly monotone decreasing ASR 46.11 → 45.00 → 39.44 over ratios 0/50/100%;
+crisis non-increasing with a tie; T_r200 = bit-exact replication of T under the
+pool contingency).
+
+**Post-lock rules:**
+1. No locked number changes. A discovered error is corrected only through a dated
+   amendment stating what was wrong, plus manifest regeneration in the same commit;
+   silent regeneration of any results artifact is a violation.
+2. Drafting (paper/) uses locked numbers only, cited against the manifest.
+3. Exploratory exhibits remain exploratory in every draft; nothing post-hoc may
+   migrate into a confirmatory claim (Amendment 24 rule, now under lock).
+4. The frozen suite, judge pins, and adapter artifacts remain immutable as before;
+   the lock adds the RESULTS layer on top of the instrument layer.
+
+**Schedule note.** The original plan set RESULTS LOCK for 21 Aug; it is declared
+2026-08-29 under the Amendment 22 re-plan, with drafting the remaining critical path.
+
+**Record consequences.** Lock v6 is issued via the Amendment 14a/21 path:
+instruments byte-identical to v5 (deep-equality asserted),
+`preregistration_amendments_in_force` gains "25", `run_metadata` gains a
+`results_lock` note. v1–v5 retained unedited; the staleness scan's refusal against
+v5 is captured as the positive control before v6 is issued.
+
+*Not sighted in the problematic sense — the lock changes no analysis and no number;
+it forbids changes. Declared after all results exist, which is what a results lock
+is.*

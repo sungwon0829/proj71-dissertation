@@ -16,8 +16,8 @@
 # contradicted by the prompt hashes already written into every scored output on disk.
 pin_status: PINNED
 pin_date: "2026-08-01"
-pin_lock_file: configs/judges_pinned.lock.v5.json
-pin_lock_sha256: "f01e4e1ac1819f76ed25c07e416753a66d8916876c14a2d071b9c470af22d745"
+pin_lock_file: configs/judges_pinned.lock.v6.json
+pin_lock_sha256: "a4a30d44b95f106848ae7ab1a1c58b0d3480726f6909a53613ff1820e8c06a7f"
 
 # ===== MEASURED AGREEMENT — *** INTER-MODEL, NOT HUMAN *** =============================
 # CORRECTION 2026-08-01: every kappa in this table was measured against reference labels

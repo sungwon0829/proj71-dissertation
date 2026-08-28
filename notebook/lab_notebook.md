@@ -3915,3 +3915,37 @@ deterministic given identical data and seed — the strongest reproducibility
 statement the paper can make, demonstrated rather than assumed.
 
 Everything Amendment 24 authorized is now complete. Next entry: RESULTS LOCK.
+
+## 2026-08-29 — RESULTS LOCK declared (Amendment 25, lock v6)
+
+All four closure items complete; every precondition enumerated in Amendment 25
+verified before declaration. Sequence, in order:
+
+1. **Amendment 25** appended to preregistration_amendments.md (dated 2026-08-29):
+   the declaration, its preconditions, what is locked, and the four post-lock rules.
+2. **Positive control fired as required** before the re-issue: verify_judge_pin()
+   refused lock v5 with "STALE PIN PROVENANCE: judges_pinned.lock.v5.json declares
+   ... ['7a' ... '24'], but the pre-registration files contain [... '25'] (not
+   recorded in the lock: ['25'])". Captured to
+   results/judge_probes/staleness_refusal_amendment25_20260829.txt.
+3. **Lock v6 issued** by scripts/issue_lock_v6.py (Amendment 14a/21 path):
+   sha256 a4a30d44b95f106848ae7ab1a1c58b0d3480726f6909a53613ff1820e8c06a7f.
+   Instruments deep-equal to v5 (asserted); amendments-in-force gains "25";
+   run_metadata gains results_lock only (asserted); v1–v5 verified untouched before
+   and after; judges.yaml pointer updated in tandem; .gitattributes gains the v6
+   line per its do-not-add-a-pin-without-adding-it-here rule. verify_judge_pin()
+   now returns VERIFIED with 25 in force.
+4. **Results manifest regenerated** under the amendment: 18 sources, 38 exhibits
+   (ratio-ablation dose-response now included), lock pin resolved through
+   judges.yaml's pointer (auto-tracks re-pins), manifest sha256
+   e70a26e2f090f2cee448c3c03cf2bb2d2f544d019cea9136dbbe8ef6026267a3. The manifest
+   committed in the same commit as Amendment 25 is the lock inventory.
+
+**From this date no locked number may change.** Corrections go through a dated
+amendment plus manifest regeneration in the same commit. Drafting is the remaining
+critical path (write order per CLAUDE.md: Methods -> Results -> Intro -> Related
+Work -> Discussion -> Conclusion -> Abstract last), using locked numbers only.
+Standing paper-writer instructions from the audit remain in force: m5 (the
+over-refusal correction event stated once in Methods), m6 (kill the stale
+"3 seeds"/"mean ± CI over seeds" templates in paper/abstract.tex and the CLAUDE.md
+headline template during drafting).

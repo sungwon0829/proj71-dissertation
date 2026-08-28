@@ -1,6 +1,6 @@
 # Results manifest (one-page appendix version)
 
-Generated 2026-08-28T14:45:08+00:00 at git `13cf884ea1c3` (branch main). Machine-readable version: `notebook/results_manifest.json`.
+Generated 2026-08-28T18:11:09+00:00 at git `b08b8ca21005` (branch main). Machine-readable version: `notebook/results_manifest.json`.
 
 Every number and figure in the paper traces to a results artifact, the config and
 seed that produced it, and a SHA-256 fixing its bytes. `results/` is not
@@ -11,10 +11,10 @@ version-controlled by design; this manifest is the committed integrity record.
 | Pin | Path | SHA-256 (12) |
 |---|---|---|
 | frozen_suite | `data/redteam/redteam_suite.jsonl` | `e14c3a24184d` |
-| judges_lock_v5 | `configs/judges_pinned.lock.v5.json` | `f01e4e1ac181` |
-| judges_yaml | `configs/judges.yaml` | `7202b79fe651` |
+| judges_lock_current | `configs/judges_pinned.lock.v6.json` | `a4a30d44b95f` |
+| judges_yaml | `configs/judges.yaml` | `fa614a5b0ae3` |
 | preregistration | `notebook/preregistration.md` | `2b9edf8948f3` |
-| preregistration_amendments | `notebook/preregistration_amendments.md` | `784304286b71` |
+| preregistration_amendments | `notebook/preregistration_amendments.md` | `ca611e9bed8a` |
 
 ## Arm provenance (scored artifact -> generations -> config, seed)
 
@@ -68,6 +68,7 @@ version-controlled by design; this manifest is the committed integrity record.
 | exploratory.analysis3_mde | exploratory | `results/exploratory/analysis3_retrospective_mde/compute_mde.py` (a086cce74282) | primary_report |
 | exploratory.analysis4_blindness_mechanism | exploratory | `results/exploratory/analysis4_classifier_blindness_mechanism/analyze_mechanism.py` (60e9271e7d06) | primary_report |
 | exploratory.analysis5_direction | exploratory | `results/exploratory/analysis5_t_vs_tctrl_direction/analysis5_results.json` (f17e3aa2e448) | primary_report |
+| exploratory.ratio_ablation | exploratory | `results/exploratory/ratio_ablation/dose_response.json` (a0c69c9f225b) | primary_report |
 
 **Sign convention.** All differences in this project are T minus B3. A NEGATIVE ASR difference means T (trained-in safety) has the LOWER attack-success rate. At -5.56 points, T is the arm that is ahead and B3 is the baseline being beaten. This convention was previously implicit; it is recorded explicitly as of 2026-08-28.
 

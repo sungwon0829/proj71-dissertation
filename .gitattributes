@@ -37,3 +37,4 @@ data/redteam/FROZEN.txt            -text
 configs/judges_pinned.lock.v3.json -text
 configs/judges_pinned.lock.v4.json -text
 configs/judges_pinned.lock.v5.json -text
+configs/judges_pinned.lock.v6.json -text
