@@ -3387,3 +3387,118 @@ Corrected in references.bib (note field) and via a dated correction note in
 related_work.md; prior entries left unedited per append-only. The corroboration of the
 classifier-blindness exhibit stands in the corrected general-purpose-vs-purpose-built
 form, with the cross-dataset caveat stated.
+
+## 2026-08-28 — T_ctrl chain (train -> generate -> score) launched, seed 1
+
+**Trigger:** Amendment 22.2's calendar condition FIRED today: "T_ctrl (Revision 5) is
+trained only if the stats-and-tables phase (Tables 1-2 and the primary test) is complete
+by 30 Aug 2026" (`notebook/preregistration_amendments.md` §22.2) -- Tables 1-2 and the
+primary test completed 2026-08-28, before the 30 Aug gate. Disposition recorded in
+today's earlier "Pre-lock repro audit" entry, finding **M1**: "T_ctrl chain (train ->
+generate -> score) launched today; reported as the Revision 5 single-run weak control,
+italics, no significance test (Amendment 9)." This entry is that launch.
+
+**Produces:** the T_ctrl row in CLAUDE.md's EXPERIMENTAL ARMS table / Table 1 (single-run,
+italics, no CI/significance test per Amendment 9) -- a weak control bounding whether a
+T-vs-B3 gain is attributable to safety-specific preference *direction* or merely to the
+presence of ~25% out-of-domain preference data (Revision 5). Not one of the two headline
+arms; B3 vs T remains THE comparison.
+
+**Pre-launch verification (before any stage ran):**
+- `configs/dpo_t_ctrl.yaml` sha256 `07ffb28767f6eac5bad6593ce2a1133564022f1258d97e5b8848ec73c7be552c`
+  -- points at `results/B1_sft_seed42_v2/checkpoint-290` (the void-run-corrected B1
+  checkpoint, same as B2/T), has **no `training.seed` field** (CLI `--seed` is the sole
+  source of truth, same convention as `dpo_b2.yaml`/`dpo_t.yaml`), and
+  `training.output_dir_template` = `results/T_ctrl_dpo_seed{seed}` -> `results/T_ctrl_dpo_seed1`
+  for this run. LoRA block byte-identical to `configs/sft_lora.yaml` (r=32/alpha=64/
+  dropout=0.05, all attn+MLP projections) -- unchanged, per the binding requirement that
+  any adapter-hyperparameter change applies to B1/B2/T/T_ctrl identically; none was made.
+- `configs/eval_generation.yaml` sha256 `e7b5e6254c2dd31fe9ea0bfb5803860d3f0e05e2e87774c15ddc05939d791297`
+  (matches the sha recorded in every prior generation header; declared final per today's
+  audit disposition m2, not edited).
+- `configs/judges_pinned.lock.v4.json` sha256 `8cabb12854df721b76dd4dd676c9cc3efa5774cef218fef8ae3151f79a3d9ea7`,
+  matching `configs/judges.yaml`'s `pin_lock_sha256` field exactly -- pin VERIFIED (per
+  today's repro audit, all hash/command closures PASS).
+- **assert_hyperparams_match_sibling() reviewed before invoking, not forced blind.** Read
+  `scripts/train_dpo.py`'s `_SIBLING_ALLOWED_TO_DIFFER` set: it explicitly permits
+  `(training, output_dir_template)`, `(data, n_helpful_sample)`, `(data, n_safety_sample)`,
+  `(data, arm)` and **`(data, safety_direction)`** to differ across the {B2, T, T_ctrl}
+  trio, while forcing every other `model`/`base_adapter`/`lora`/`training` key and
+  `data.{max_length, max_length_policy, exclude_safety_inversions, chat_template_path,
+  system_prompt_file, helpful_pool_source}` to match byte-for-byte. T_ctrl's only intended
+  difference from T is `data.safety_direction: better` vs `safer` (776 of 4,924 PKU rows
+  actually flip, per the weak-control finding recorded 2026-08-01) -- this is exactly what
+  the assertion allows, so it was safe to let `train_dpo.py` invoke it automatically (it is
+  a startup gate inside the script, not a separate CLI tool) rather than skip or force it.
+  It ran and PASSED at launch (see `train_t_ctrl.log`).
+- `results/T_dpo_seed1/dpo_data_manifest.json` present -- required by T_ctrl's own
+  startup check (its 15,000 helpfulness pairs must exactly match T's sampled ids for the
+  same seed; verified empirically, not just by determinism argument).
+- Disk space: `C:` 743 GB avail / 893 GB total, `D:` 608 GB avail / 894 GB total (`df -h`)
+  -- ample for one more LoRA run (~1 GB adapter + optimizer state, comparable to B1/T's
+  footprint).
+- GPU free: `nvidia-smi` immediately before launch showed **2 MiB / 97887 MiB used, no
+  running processes**. No GPU gate stage was built into the chain (unlike
+  `run_seeds23_overnight.sh`'s sentinel/idle-time gate) -- confirmed idle at launch time
+  instead.
+- No collision: `results/T_ctrl_dpo_seed1` and `results/t_ctrl_seed42` did not exist
+  before launch (checked directly).
+
+**Chain:** `scripts/run_t_ctrl_chain.sh` (new, modelled on `scripts/run_seeds23_overnight.sh`'s
+preflight/run_stage/status-file pattern). Launched detached from a single foreground Bash
+call: `nohup bash scripts/run_t_ctrl_chain.sh > results/t_ctrl_chain/nohup.log 2>&1 & disown`
+-- never `run_in_background` (the ~60-minute kill trap), matching project convention.
+
+**One relaunch needed:** first attempt's preflight failed on a transcription error --
+the sha256 hard-coded into the preflight check was missing its final hex digit (63 chars
+instead of 64), a copy mistake made while writing the script, not a real config drift.
+The script correctly refused to proceed rather than skip the check. No stage beyond
+preflight ran, no output paths were created, no GPU/model work started, and no stray
+process was left behind (verified before relaunch). Fixed the constant to the correct
+64-character digest and relaunched cleanly.
+
+**Stages (linear, each gated on the previous succeeding):**
+1. `train_t_ctrl`: `python scripts/train_dpo.py --config configs/dpo_t_ctrl.yaml --seed 1`
+   -> `results/T_ctrl_dpo_seed1/`
+2. `gen_t_ctrl`: `python scripts/eval_generate.py --arm t_ctrl --adapter results/T_ctrl_dpo_seed1
+   --suite data/redteam/redteam_suite.jsonl --seed 42 --config configs/eval_generation.yaml`
+   -> `results/t_ctrl_seed42/generations.jsonl` (generation seed fixed at 42 project-wide;
+   decoding is greedy, so it does not affect output -- the training seed is what
+   distinguishes the arm).
+3. `score_t_ctrl`: `python scripts/eval_score.py --generations results/t_ctrl_seed42/generations.jsonl
+   --suite data/redteam/redteam_suite.jsonl --out results/t_ctrl_seed42/scored_realsuite.jsonl`
+   -- **no `--over_refusal_labels` passed deliberately**: Revision 4's hand-label
+   requirement covers B3/T seed 1 only, not T_ctrl, so over-refusal for this arm is
+   reported via the judge cross-check alone (kappa ~0.075, NOT REPORTABLE as primary) and
+   the summary will mark that column `is_paper_number: False` for over-refusal
+   specifically. Expected and correct, not an error -- matches how B0/B1/B2 are already
+   scored today.
+
+**Launch time:** chain start 2026-08-28T00:04:35Z (preflight passed same second); training
+process launched 2026-08-28T00:04:35Z. **Process tree confirmed alive** ~65s after launch:
+`bash scripts/run_t_ctrl_chain.sh` (PID 23444) -> nested bash (PID 16260) -> venv shim
+`python.exe` (PID 16928) -> real training process `python.exe` (PID **9268**), CPU time
+accumulating (92s CPU over ~70s wall at last check, consistent with the CPU-bound
+helpful/safety pool construction + tokenization phase before GPU-heavy work starts -- see
+T seed 1's reference log, which shows the identical `[helpful pool]` / `[safety pool]`
+funnel stats logged before `[model] loading base Qwen...`). `train_t_ctrl.log` was still
+0 bytes at last check -- consistent with Python's default block-buffering on a
+non-TTY stdout redirect (same as every other detached run in this project; the log
+populates once the buffer flushes or the stage completes, not a sign of failure).
+`chain_status.json` shows `preflight: exit_code 0`, `train_t_ctrl: running`.
+
+**ETA (from prior-run wall-clocks):** T seed 1's own training took `train_runtime` 6514.2s
+(1.81 h); B2 v4 took 7233.2s (2.01 h) -- both on the identical 19,924-pair/1-epoch/2x8
+config T_ctrl shares, so **~1.8-2.0 h for training** is the grounded estimate. Generation
+over the full 300-item suite took ~10-12 min in the most recent B2/T regeneration pass
+(`phase1_b2_gen.log`/`phase1_t_gen.log`, Aug 27). Scoring (no hand-labels, judge
+cross-check only) took ~7 min per arm in the most recent B0-T scoring pass
+(`phase2_score_*.log` creation-time deltas, Aug 27); the task brief's own prior of ~25 min
+is used as the conservative upper bound. **Total chain ETA: ~2.0-2.5 h from launch, i.e.
+substantially complete by ~02:00-02:35 UTC on 2026-08-28** (launch 00:04:35Z). Will append
+a completion entry with final loss, wall-clock, and the printed weak-control note once the
+chain finishes; per Amendment 12's defect-only relaunch rule, a failed/incomplete stage
+will be reported as attempted-and-incomplete, not silently retried.
+
+**Anomalies:** none beyond the sha256 transcription typo on the first (aborted, harmless)
+launch attempt, described above.
