@@ -3772,3 +3772,7 @@ Verified CLEAN (all plotted values exact against sources; render inspected, no
 collisions). Environment note: matplotlib 3.11.1 was installed into the venv for this
 figure; pip_freeze.txt regenerated in the housekeeping commit.
 Artifacts: results/exploratory/frontier_figure/.
+
+- Housekeeping (2026-08-28): b1_seed42/README.md clarified (per-item vs whole-file
+  identity, re-verified 300/300); pip_freeze.txt regenerated (matplotlib 3.11.1 added
+  to the venv by exploratory analysis 6).
