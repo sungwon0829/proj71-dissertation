@@ -3877,3 +3877,41 @@ NOTE: the manifest records git_head at generation time (13cf884) — the tree th
 artifacts were verified under; the manifest's own commit necessarily postdates it.
 It must be REGENERATED after the ratio-ablation exhibit lands and before RESULTS
 LOCK, so the lock-time manifest includes the ablation and a lock-adjacent git_head.
+
+## 2026-08-29 — Pre-lock closure 4/4 (part 1): ratio ablation landed; dose-response monotone; T_r200 is a bit-exact replication of T
+
+The Amendment 24.2 chain completed 2026-08-28T18:03Z, all eight stages exit 0
+(train/gen both arms, then score both). Exhibit produced by
+scripts/make_ratio_ablation_exhibit.py after a 9/9 verification pass (b2/t points
+reproduce tables_final exactly; suite sha pinned on every scored file; matched volume
+19,924 asserted on all three manifests). Artifacts:
+results/exploratory/ratio_ablation/{dose_response.json, report.md}.
+
+| Achieved ratio | Arm | ASR primary (n=180) | 95% CI | Crisis (n=60) | 95% CI |
+|---|---|---|---|---|---|
+| 0% | b2 | 46.11% | [38.89, 53.33] | 36.67% | [25.00, 48.33] |
+| 50% | t_r050 | 45.00% | [37.78, 52.22] | 30.00% | [18.33, 41.67] |
+| 100% | t | 39.44% | [32.22, 46.67] | 30.00% | [18.33, 41.67] |
+| 100% | t_r200 | 39.44% (replication) | — | 30.00% (replication) | — |
+
+**Pre-committed reading (Amendment 24.2): ASR primary is strictly monotone decreasing
+across the three distinct ratios (46.11 -> 45.00 -> 39.44); crisis is monotone
+non-increasing with a tie (36.67 -> 30.00 -> 30.00).** Per the rationale placed on
+record before any number existed, a monotone pattern permits the Discussion framing
+"a real, ordered effect below the pre-registered threshold" — descriptively, with no
+trend test (three points), never touching Table 1/2 or the headline. Note the shape:
+most of the reduction arrives in the upper half of the dose (50%->100% is -5.56 pts;
+0%->50% only -1.11), so the half-dose arm buys almost nothing — worth one Discussion
+sentence, no more. All three CIs overlap substantially.
+
+**Pool contingency + replication.** The contingency fixed at launch fired: the
+filtered pool (4,924) cannot supply 200%, so T_r200 trained on the full pool =
+exactly T's data, same seed. Verified: dpo_data_manifest.json differs from T's ONLY
+in {arm, cli_invocation, config}; adapter_model.safetensors is BIT-IDENTICAL to T's
+(sha256 2db6dbdf5c07...); all 240 scored verdicts equal T's item-for-item.
+Incidental finding worth a Methods/repro sentence: LoRA DPO training on this stack
+(Windows Server 2025, Blackwell RTX PRO 6000, PyTorch 2.11 cu128, sdpa) is bitwise
+deterministic given identical data and seed — the strongest reproducibility
+statement the paper can make, demonstrated rather than assumed.
+
+Everything Amendment 24 authorized is now complete. Next entry: RESULTS LOCK.

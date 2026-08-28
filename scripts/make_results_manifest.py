@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -32,7 +33,6 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 
 FROZEN_SUITE_SHA = "e14c3a24184d01cbf31bbcfa42be03104ae07b0bea1132bc5b08a177645b6689"
-LOCK_V5_SHA = "f01e4e1ac1819f76ed25c07e416753a66d8916876c14a2d071b9c470af22d745"
 
 
 def die(msg: str):
@@ -97,13 +97,21 @@ def main():
     suite_sha = sha256_file(suite)
     if suite_sha != FROZEN_SUITE_SHA:
         die(f"frozen suite hash mismatch: {suite_sha} != {FROZEN_SUITE_SHA}")
-    lock = must("configs/judges_pinned.lock.v5.json")
+    # the current lock is resolved through judges.yaml's pin pointer, exactly as
+    # verify_judge_pin() resolves it, so a legitimate re-pin auto-tracks here; the
+    # two-file tandem (pointer + sha) is still cross-checked
+    yaml_text = must("configs/judges.yaml").read_text(encoding="utf-8")
+    m_file = re.search(r"pin_lock_file:\s*(\S+)", yaml_text)
+    m_sha = re.search(r'pin_lock_sha256:\s*"([0-9a-f]{64})"', yaml_text)
+    if not (m_file and m_sha):
+        die("judges.yaml pin pointer (pin_lock_file / pin_lock_sha256) not found")
+    lock = must(m_file.group(1))
     lock_sha = sha256_file(lock)
-    if lock_sha != LOCK_V5_SHA:
-        die(f"lock v5 hash mismatch: {lock_sha} != {LOCK_V5_SHA}")
+    if lock_sha != m_sha.group(1):
+        die(f"lock {lock} hashes to {lock_sha} but judges.yaml records {m_sha.group(1)}")
     pins = {
         "frozen_suite": {"path": rel(suite), "sha256": suite_sha},
-        "judges_lock_v5": {"path": rel(lock), "sha256": lock_sha},
+        "judges_lock_current": {"path": rel(lock), "sha256": lock_sha},
         "judges_yaml": {"path": "configs/judges.yaml",
                         "sha256": sha256_file(must("configs/judges.yaml")),
                         "note": "recorded provenance only; the ENFORCED pin is the lock file"},
@@ -332,6 +340,7 @@ def main():
         "analysis3_mde": "results/exploratory/analysis3_retrospective_mde",
         "analysis4_blindness_mechanism": "results/exploratory/analysis4_classifier_blindness_mechanism",
         "analysis5_direction": "results/exploratory/analysis5_t_vs_tctrl_direction",
+        "ratio_ablation": "results/exploratory/ratio_ablation",
     }
     for name, d in expl.items():
         dp = REPO / d
