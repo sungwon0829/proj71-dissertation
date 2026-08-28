@@ -3717,3 +3717,14 @@ noise-limited only in which value got observed. Crisis: T−B3 −6.67 / +15.00 
 diff SD 11.10 — sign flips; **noise-limited, no direction inferable**. k=3 caveat: SDs
 carry 2 df (95% CI ≈ 0.52–6.3× the estimate). Verified CLEAN.
 Artifacts: results/exploratory/variance_decomposition/.
+
+## 2026-08-28 — Exploratory 3/6: retrospective minimum detectable effect
+
+Conditioned on the observed discordance (56/180): **MDE at 80% power = 11.56 pts**
+(exact McNemar, α=.05 two-sided); power at the pre-registered 10-pt threshold = 0.67;
+power at the observed −5.56 = 0.25. Pre-specified juxtaposition: **the design could not
+have detected a 10-point raw effect at 80% power given the observed discordance**; the
+non-significant primary (p=0.229 exact) is consistent both with no effect and with a
+real effect of the observed size. Unconditional simulation cross-check (seed 0)
+concurs a fortiori. Verified CLEAN.
+Artifacts: results/exploratory/analysis3_retrospective_mde/.
