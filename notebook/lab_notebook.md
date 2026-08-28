@@ -3949,3 +3949,78 @@ Standing paper-writer instructions from the audit remain in force: m5 (the
 over-refusal correction event stated once in Methods), m6 (kill the stale
 "3 seeds"/"mean ± CI over seeds" templates in paper/abstract.tex and the CLAUDE.md
 headline template during drafting).
+
+## 2026-08-29 — Pre-drafting verification (owner directive, 4 items): reward-model acceptance located; Table 1 completeness; multiple-comparisons position; assumptions register
+
+**1. Reward-model acceptance test: ALREADY RUN — nothing new needed.** Run 2026-08-27
+in the Phase 2 chain, exactly the directed criterion (pass threshold >= 0.70 pairwise
+accuracy, chosen > rejected): **PASS 50/50, accuracy 1.000, 0 ties**, on 50 pairs held
+out from BOTH B2-v4's and T-seed-1's training manifests (selection rule recorded in
+the artifact), scored through the production path
+(load_helpfulness_model/helpfulness_score_convs, single code path). Artifact:
+results/judge_probes/reward_acceptance_20260827_004017.json (seed 0, model+revision
+pinned, judge-pin VERIFIED at run time); log results/phase2_acceptance.log; notebook
+entry 2026-08-27 "PHASE 2 COMPLETE". The artifact carries the built-in near-chance
+warning ("accuracy near 0.5 indicates a head-loading/pooling/padding defect") — the
+beaver-dam-EOS precedent is why the test exists. Methods citation: script + artifact +
+this entry. Honest scope note for Methods: the held-out pairs are trivially separable
+(median chosen/rejected similarity 0.108, 2026-08-x pref-data entry), so 50/50
+certifies the loading/scoring interface, not fine discrimination.
+
+**2. Table 1 completeness (all from locked artifacts).**
+
+| Arm | ASR primary | Crisis (co-primary) | Over-refusal | Helpfulness |
+|---|---|---|---|---|
+| b0 | 26.11% (italics, context) | 23.3% (summary only, not a paper exhibit) | (11.67%)‡ judge x-check | 7.867 |
+| b1 | 51.11% (italics, context) | 65.0% (summary only) | (18.33%)‡ judge x-check | −9.248 |
+| b2 | 46.11% | 36.7% (summary only) | 0.00% hand labels† (shares b3 file) | 8.621 |
+| b3 | 45.00% | 36.67% (Table 2, CI + p) | 0.00% hand labels | 8.621 |
+| t | 39.44% | 30.00% (Table 2, CI + p) | 0.00% hand labels | 6.487 |
+| t_ctrl | 41.11% (single-run, Amendment 9) | 36.67% (manifest exhibit) | 23.33% judge-only (dagger) | 6.451 |
+
+Instruments: ASR = behavioural judge, one instrument across all arms; crisis =
+crisis judge, reported as the B3-vs-T co-primary in Table 2 per Amendment 13 (other
+arms' crisis rates exist in summaries as context, never pooled); over-refusal =
+hand labels for b2/b3/t (Revision 4 primary instrument), rubric-judge cross-check
+ONLY for b0/b1/t_ctrl; helpfulness = pinned PsychoCounsel reward model everywhere
+(b2 = b3 because the filter replaced none of the 120 scored items).
+**Mixed-instrument marking: CONFIRMED present in the rendered Table 1**
+(results/tables_final/tables_final.md): hand-label rows say "(hand labels)", b2
+carries † (shared label file, filter fired 0/60 benign), b0/b1 are parenthesised
+with ‡ and an explicit "not the same instrument, never directly comparable" note —
+the same convention as the frontier figure's daggers. **One drafting requirement:**
+the T_ctrl row is locked as a manifest exhibit (table1.t_ctrl.row) but is NOT in
+tables_final.md's rendering (make_tables_final predates the T_ctrl chain); the
+paper's Table 1 must add it in italics with the judge-only dagger on its
+over-refusal cell. Presentation only; no locked number changes.
+
+**3. Multiple-comparisons position (Methods-ready paragraph):**
+
+> The confirmatory family contains exactly one hypothesis test: the pre-registered
+> primary endpoint (ASR over the 180 non-crisis attack prompts, T vs B3, two-sided
+> paired sign-flip permutation test; Amendment 13). The crisis_adjacent endpoint
+> (n=60) is a pre-registered co-primary scored by a different judge under opposite
+> refusal semantics; it is reported separately with its own interval and p-value and
+> is never pooled with the primary. No alpha adjustment is applied across these two
+> endpoints: both nulls are retained (p=0.227; p=0.484), so no positive claim
+> depends on the absence of correction, and the co-primary is disclosed as such
+> precisely so a reader may apply a Bonferroni threshold (alpha=0.025) — under
+> which nothing changes. The over-refusal criterion is descriptive by
+> pre-registration (Revision 7: a point-estimate bound, expressly "not a passed
+> test"). Every remaining quantity — the TOST equivalence reading (labelled
+> exploratory in its artifact), the Amendment 23 seed panel (including seed 2's
+> nominally significant adverse crisis result, p=0.048, reported unsoftened), the
+> six Amendment 24 exploratory analyses, and the Amendment 24.2 ratio ablation —
+> is labelled post-hoc or exploratory, shows nominal uncorrected p-values only
+> where transparency requires them, and supports no inferential claim; none is part
+> of the confirmatory family.
+
+**4. Assumptions register created:** notebook/assumptions.md — ten assumptions
+(A1 judge construct validity, A2 PKU transfer [= the claim, tested], A3 greedy
+decoding [untested, limitation], A4 suite coverage, A5 LoRA capacity [untested,
+limitation], A6 single-seed primary [measured post-hoc], A7 labeller reliability,
+A8 reward-model loading [tested, item 1], A9 judge independence [tested 15/15],
+A10 determinism + audit trail), each with status TESTED/PARTIAL/UNTESTED, the
+artifact that tests it or the reason it is untested, and the residual risk.
+Companion to results_manifest.md as the "explicit assumptions and audit trail"
+pair; becomes a Methods subsection.
