@@ -341,6 +341,7 @@ def main():
         "analysis4_blindness_mechanism": "results/exploratory/analysis4_classifier_blindness_mechanism",
         "analysis5_direction": "results/exploratory/analysis5_t_vs_tctrl_direction",
         "ratio_ablation": "results/exploratory/ratio_ablation",
+        "analysis7_b0_vs_b1": "results/exploratory/analysis7_b0_vs_b1_sft_erosion",
     }
     for name, d in expl.items():
         dp = REPO / d
@@ -352,8 +353,9 @@ def main():
         ex(f"exploratory.{name}", "exploratory_table", "exploratory",
            {rel(p): sha256_file(p) for p in files},
            ["primary_report"], files[0],
-           notes="post-hoc exploratory (Amendment 24), decided after seeing the primary "
-                 "result; reported as such, never confirmatory")
+           notes="post-hoc exploratory (Amendment 24, or Amendment 26 for analysis7), "
+                 "decided after seeing the primary result; reported as such, never "
+                 "confirmatory")
 
     manifest = {
         "record_type": "results_manifest",
@@ -364,7 +366,7 @@ def main():
         "git_branch": git_branch,
         "working_tree_dirty": dirty,
         "policy_note": (
-            "results/ artifacts are deliberately not version-controlled (CLAUDE.md repo "
+            "results/ artifacts are deliberately not version-controlled (repository "
             "rule); their integrity is fixed by the sha256 values recorded here. git_head "
             "identifies the exact code+config tree the artifacts were produced and "
             "verified under. Every value in `exhibits` was read live from the named "

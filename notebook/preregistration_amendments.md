@@ -1260,3 +1260,51 @@ v5 is captured as the positive control before v6 is issued.
 *Not sighted in the problematic sense — the lock changes no analysis and no number;
 it forbids changes. Declared after all results exist, which is what a results lock
 is.*
+
+---
+
+## Amendment 26 — Post-hoc paired test of B0 against B1 (SFT erosion)
+
+**Dated 2026-09-01, sighted.** Decided after the primary result, the Amendment 23 panel, the
+Amendment 24 exhibits and the results lock (Amendment 25) had all been seen. Everything here
+is **post-hoc exploratory**: reported under an explicit exploratory label, never confirmatory,
+never a Table 1/2 number, never in the headline sentence, never used to evaluate the
+pre-registered threshold. No locked number changes. This amendment adds one exploratory
+exhibit and alters nothing that Amendment 25 locked.
+
+**Justification (one line):** B0 (26.11%) and B1 (51.11%) are single-run context arms whose
+prompt-set intervals do not overlap; the paper reports the difference, a reader will ask
+whether it was tested, so the test is run once, with the same machinery as the primary test,
+and reported as what it is.
+
+**Pre-specified outputs (fixed in the script before it was run):** the full 2×2 concordance
+table on the 180 primary prompts (both safe, both unsafe, B1-only unsafe, B0-only unsafe); the
+paired difference B1 − B0 in points; a 95% percentile bootstrap over prompts (10,000
+resamples, seed 0); the two-sided paired sign-flip permutation test (20,000 permutations,
+seed 0); the exact McNemar test beside it. Primary categories only (prefilling, persona,
+many_shot); crisis never pooled (Amendment 13). The script asserts the locked breach counts
+(B0 47, B1 92) before computing anything and refuses to run otherwise.
+
+**Result (run 2026-09-01 22:16 local, assertions passed):** both unsafe 32, B1-only unsafe 60,
+B0-only unsafe 15, both safe 73 (75 discordant pairs). Difference +25.00 points, 95% CI
+[+16.67, +33.89], permutation p = 0/20,000 (reported as p < 0.001), exact McNemar
+p = 1.588e−07.
+
+**Consequences for the paper:** one sentence in the Introduction's contribution paragraph,
+labelled post hoc; one entry in the list of post-hoc analyses in Methods §4.3 (Statistics);
+one sentence in Results §5.2 under the lead "Supervised fine-tuning and safety." carrying the
+post-hoc label; one clause in the Discussion pointing at §5.2; one sentence in Appendix I. Not
+in the abstract as a test result (the abstract states the two rates descriptively), not in
+Table 3, not in the conclusion.
+
+**Record consequences.** New exhibit
+`results/exploratory/analysis7_b0_vs_b1_sft_erosion/` containing `analyze_b0_b1.py`,
+`summary.json` (sha256 075ba607b94a5c2fc5a17c32d6f7f62977a0da95066496b0947d27a97c25db96) and
+`report.md` (sha256 c4fee807fbfd90a6d621c6f63ec97283d6747e356e14d0015f8fa87f1d8871ea); input
+hashes for `results/b0_seed42/scored_realsuite.jsonl` and `results/b1_seed42/scored_realsuite.jsonl`
+are recorded in `summary.json` under `provenance`. Manifest regenerated in the same commit to
+add `exploratory.analysis7_b0_vs_b1` (status exploratory, sources `scored_b0`, `scored_b1`).
+Lock v6 instruments untouched, so no re-pin.
+
+*Sighted, and declared as such. The protection is pre-specification of every output above and
+pre-commitment to report whatever the test showed.*
