@@ -352,7 +352,8 @@ def main():
             die(f"exploratory dir empty: {dp}")
         ex(f"exploratory.{name}", "exploratory_table", "exploratory",
            {rel(p): sha256_file(p) for p in files},
-           ["primary_report"], files[0],
+           ["scored_b0", "scored_b1"] if name == "analysis7_b0_vs_b1"
+           else ["primary_report"], files[0],
            notes="post-hoc exploratory (Amendment 24, or Amendment 26 for analysis7), "
                  "decided after seeing the primary result; reported as such, never "
                  "confirmatory")
@@ -391,8 +392,8 @@ def main():
         f"Machine-readable version: `notebook/results_manifest.json`.",
         "",
         "Every number and figure in the paper traces to a results artifact, the config and",
-        "seed that produced it, and a SHA-256 fixing its bytes. `results/` is not",
-        "version-controlled by design; this manifest is the committed integrity record.",
+        "seed that produced it, and a SHA-256 fixing its bytes. Generations, scored outputs",
+        "and adapters are not version-controlled; this manifest is the integrity record.",
         "",
         "## Pinned instruments",
         "",
@@ -436,8 +437,8 @@ def main():
         "0.074) and carry daggers in the paper. T_ctrl is a single-run weak control:",
         "no CI, no significance test (Amendment 9). Robustness seeds 2-3 are the",
         "sighted Amendment 23 panel; the pre-registered primary analysis is training",
-        "seed 1. Exploratory exhibits are Amendment 24 post-hoc analyses, never",
-        "confirmatory. The primary ASR difference is on the raw observed scale (judge",
+        "seed 1. Exploratory exhibits are Amendment 24 and Amendment 26 post-hoc analyses,",
+        "never confirmatory. The primary ASR difference is on the raw observed scale (judge",
         "recall 0.55): it is not directly comparable to the 10-point TRUE-scale",
         "pre-registered threshold.",
     ]
