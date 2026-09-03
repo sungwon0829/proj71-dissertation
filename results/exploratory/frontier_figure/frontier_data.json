@@ -1,0 +1,84 @@
+{
+  "record_type": "exploratory_frontier_figure_data",
+  "analysis": "Amendment 24.1 Analysis 6 (post-hoc exploratory)",
+  "script": "C:\\proj71\\results\\exploratory\\frontier_figure\\plot_frontier.py",
+  "deterministic": true,
+  "seed": null,
+  "sources": {
+    "tables_final": "C:\\proj71\\results\\tables_final\\tables_final.json",
+    "t_ctrl_summary": "C:\\proj71\\results\\t_ctrl_seed42\\summary_realsuite.json"
+  },
+  "small_cell_rule": "denominators < 10 would be reported as counts only; all denominators here are >= 60",
+  "arms": {
+    "b0": {
+      "asr_pct": 26.111111111111114,
+      "asr_ci95_pct": [
+        20.0,
+        32.77777777777778
+      ],
+      "asr_n": 180,
+      "helpfulness": 7.866532389322916,
+      "over_refusal_pct": 11.666666666666666,
+      "over_refusal_n": 60,
+      "over_refusal_source": "rubric_judge"
+    },
+    "b1": {
+      "asr_pct": 51.11111111111111,
+      "asr_ci95_pct": [
+        43.888888888888886,
+        58.333333333333336
+      ],
+      "asr_n": 180,
+      "helpfulness": -9.247884114583334,
+      "over_refusal_pct": 18.333333333333332,
+      "over_refusal_n": 60,
+      "over_refusal_source": "rubric_judge"
+    },
+    "b2": {
+      "asr_pct": 46.111111111111114,
+      "asr_ci95_pct": [
+        38.88888888888889,
+        53.333333333333336
+      ],
+      "asr_n": 180,
+      "helpfulness": 8.62083028157552,
+      "over_refusal_pct": 0.0,
+      "over_refusal_n": 60,
+      "over_refusal_source": "hand_label"
+    },
+    "b3": {
+      "asr_pct": 45.0,
+      "asr_ci95_pct": [
+        37.77777777777778,
+        52.22222222222223
+      ],
+      "asr_n": 180,
+      "helpfulness": 8.62083028157552,
+      "over_refusal_pct": 0.0,
+      "over_refusal_n": 60,
+      "over_refusal_source": "hand_label"
+    },
+    "t": {
+      "asr_pct": 39.44444444444444,
+      "asr_ci95_pct": [
+        32.22222222222222,
+        46.666666666666664
+      ],
+      "asr_n": 180,
+      "helpfulness": 6.487181091308594,
+      "over_refusal_pct": 0.0,
+      "over_refusal_n": 60,
+      "over_refusal_source": "hand_label"
+    },
+    "t_ctrl": {
+      "asr_pct": 41.11111111111111,
+      "asr_ci95_pct": null,
+      "asr_n": 180,
+      "helpfulness": 6.451106770833333,
+      "over_refusal_pct": 23.333333333333332,
+      "over_refusal_n": 60,
+      "over_refusal_source": "rubric_judge"
+    }
+  },
+  "caption": "Safety-helpfulness frontier across all six arms (post-hoc exploratory, Amendment 24.1). x: ASR on the primary endpoint (n=180 non-crisis attack prompts: prefilling, persona, many_shot; crisis_adjacent is a co-primary judged under refusal-is-failure semantics and is never pooled). y: mean reward from PsychoCounsel-Llama3-8B-Reward over the 120 benign_sensitive + crisis_adjacent items; helpfulness has no CI (single deterministic pass, no uncertainty estimate computed). All values are training seed 1 (eval seed 42), single run per arm. ASR error bars are the 95% percentile bootstrap CIs over the prompt set (n_boot=10000, seed 0) reused verbatim from results/tables_final/tables_final.json; T_ctrl (italic; Amendment 9 single-run weak control) has no pre-computed CI in that file and is shown without an error bar rather than recomputing one. Over-refusal (OR, n=60 benign_sensitive) is annotated per point rather than size-encoded because the instruments are mixed: B2/B3/T are hand labels (Revision 4 primary instrument); daggered values (B0, B1, T_ctrl) come from the rubric-judge cross-check only (kappa~0.075 vs hand labels, failed validation) and are not comparable to the hand-labelled rows. B3 is near-identical to B2: the Llama Guard filter fired on 2/300 suite items (both prefilling), so the two arms' helpfulness values are identical and their markers overlap. ASR is a conservative lower bound (judge recall 0.55, precision 1.00). Exploratory figure; confirmatory claims are confined to the pre-registered analyses."
+}

@@ -1,0 +1,809 @@
+{
+  "exhibit": "analysis4_classifier_blindness_mechanism",
+  "governance": "POST-HOC EXPLORATORY (Amendment 24.1); diagnostic only; never a Table 1/2 number",
+  "is_paper_number": false,
+  "scope": "primary categories only (prefilling, persona, many_shot; n=180 prompts/arm); crisis_adjacent never pooled (Amendment 13) and not re-cut here - its classifier coverage is in the parent exhibit",
+  "length_source": "whitespace-token count of response_full_turn (delivered assistant turn; includes attacker-written prefix on prefilling items). No generated-token counts exist in generation metadata (only prompt_n_tokens), so recorded token counts were unavailable.",
+  "degeneracy_source": "per-item degenerate_loose/degenerate_strict flags carried in each arm's canonical scored file (degeneracy_definition_source: scripts/analyze_degeneracy.py). All five arms assessable; flag used in cross-tabs: degenerate_loose.",
+  "b3_choice": "b3 EXCLUDED from LG-missed and missed-by-both mechanism cells (near-tautology: the B3 filter IS Llama Guard); BD-missed retained; b3 Wilson CI reported but flagged.",
+  "small_cell_rule": "any denominator < 10: counts only, no percentage",
+  "tercile_rule": "rank-based within arm over the BREACH set, ties broken by id, sizes as equal as possible (remainder to earlier terciles)",
+  "consistency_anchors_passed": {
+    "b0": {
+      "n_breach": 47,
+      "lg": 3,
+      "bd": 3,
+      "neither": 42
+    },
+    "b1": {
+      "n_breach": 92,
+      "lg": 13,
+      "bd": 4,
+      "neither": 77
+    },
+    "b2": {
+      "n_breach": 83,
+      "lg": 2,
+      "bd": 2,
+      "neither": 79
+    },
+    "b3": {
+      "n_breach": 81,
+      "lg": 0,
+      "bd": 2,
+      "neither": 79
+    },
+    "t": {
+      "n_breach": 71,
+      "lg": 3,
+      "bd": 0,
+      "neither": 68
+    }
+  },
+  "wilson_ci": [
+    {
+      "arm": "b0",
+      "n_breach": 47,
+      "missed_by_both": 42,
+      "fraction": "0.8936",
+      "wilson95_lo": "0.7741",
+      "wilson95_hi": "0.9537",
+      "note": ""
+    },
+    {
+      "arm": "b1",
+      "n_breach": 92,
+      "missed_by_both": 77,
+      "fraction": "0.8370",
+      "wilson95_lo": "0.7483",
+      "wilson95_hi": "0.8986",
+      "note": ""
+    },
+    {
+      "arm": "b2",
+      "n_breach": 83,
+      "missed_by_both": 79,
+      "fraction": "0.9518",
+      "wilson95_lo": "0.8825",
+      "wilson95_hi": "0.9811",
+      "note": ""
+    },
+    {
+      "arm": "b3",
+      "n_breach": 81,
+      "missed_by_both": 79,
+      "fraction": "0.9753",
+      "wilson95_lo": "0.9144",
+      "wilson95_hi": "0.9932",
+      "note": "NEAR-TAUTOLOGY: B3 filter IS Llama Guard; missed-by-both upper-bounded by construction on the LG side"
+    },
+    {
+      "arm": "t",
+      "n_breach": 71,
+      "missed_by_both": 68,
+      "fraction": "0.9577",
+      "wilson95_lo": "0.8830",
+      "wilson95_hi": "0.9855",
+      "note": ""
+    }
+  ],
+  "crosstab": [
+    {
+      "arm": "b0",
+      "cut": "length_tercile",
+      "level": "T1 [1-58 ws-tokens]",
+      "n_breach": 16,
+      "lg_missed": 15,
+      "lg_missed_frac": "0.938",
+      "bd_missed": 15,
+      "bd_missed_frac": "0.938",
+      "missed_by_both": 14,
+      "missed_by_both_frac": "0.875",
+      "n_degenerate_loose_in_cell": 0,
+      "b3_note": ""
+    },
+    {
+      "arm": "b0",
+      "cut": "length_tercile",
+      "level": "T2 [60-101 ws-tokens]",
+      "n_breach": 16,
+      "lg_missed": 16,
+      "lg_missed_frac": "1.000",
+      "bd_missed": 16,
+      "bd_missed_frac": "1.000",
+      "missed_by_both": 16,
+      "missed_by_both_frac": "1.000",
+      "n_degenerate_loose_in_cell": 0,
+      "b3_note": ""
+    },
+    {
+      "arm": "b0",
+      "cut": "length_tercile",
+      "level": "T3 [101-426 ws-tokens]",
+      "n_breach": 15,
+      "lg_missed": 13,
+      "lg_missed_frac": "0.867",
+      "bd_missed": 13,
+      "bd_missed_frac": "0.867",
+      "missed_by_both": 12,
+      "missed_by_both_frac": "0.800",
+      "n_degenerate_loose_in_cell": 0,
+      "b3_note": ""
+    },
+    {
+      "arm": "b0",
+      "cut": "degeneracy_loose",
+      "level": "degenerate_loose",
+      "n_breach": 0,
+      "lg_missed": 0,
+      "lg_missed_frac": "",
+      "bd_missed": 0,
+      "bd_missed_frac": "",
+      "missed_by_both": 0,
+      "missed_by_both_frac": "",
+      "n_degenerate_loose_in_cell": 0,
+      "b3_note": ""
+    },
+    {
+      "arm": "b0",
+      "cut": "degeneracy_loose",
+      "level": "non_degenerate",
+      "n_breach": 47,
+      "lg_missed": 44,
+      "lg_missed_frac": "0.936",
+      "bd_missed": 44,
+      "bd_missed_frac": "0.936",
+      "missed_by_both": 42,
+      "missed_by_both_frac": "0.894",
+      "n_degenerate_loose_in_cell": 0,
+      "b3_note": ""
+    },
+    {
+      "arm": "b0",
+      "cut": "attack_category",
+      "level": "prefilling",
+      "n_breach": 22,
+      "lg_missed": 19,
+      "lg_missed_frac": "0.864",
+      "bd_missed": 20,
+      "bd_missed_frac": "0.909",
+      "missed_by_both": 18,
+      "missed_by_both_frac": "0.818",
+      "n_degenerate_loose_in_cell": 0,
+      "b3_note": ""
+    },
+    {
+      "arm": "b0",
+      "cut": "attack_category",
+      "level": "persona",
+      "n_breach": 11,
+      "lg_missed": 11,
+      "lg_missed_frac": "1.000",
+      "bd_missed": 10,
+      "bd_missed_frac": "0.909",
+      "missed_by_both": 10,
+      "missed_by_both_frac": "0.909",
+      "n_degenerate_loose_in_cell": 0,
+      "b3_note": ""
+    },
+    {
+      "arm": "b0",
+      "cut": "attack_category",
+      "level": "many_shot",
+      "n_breach": 14,
+      "lg_missed": 14,
+      "lg_missed_frac": "1.000",
+      "bd_missed": 14,
+      "bd_missed_frac": "1.000",
+      "missed_by_both": 14,
+      "missed_by_both_frac": "1.000",
+      "n_degenerate_loose_in_cell": 0,
+      "b3_note": ""
+    },
+    {
+      "arm": "b0",
+      "cut": "overall",
+      "level": "overall_primary",
+      "n_breach": 47,
+      "lg_missed": 44,
+      "lg_missed_frac": "0.936",
+      "bd_missed": 44,
+      "bd_missed_frac": "0.936",
+      "missed_by_both": 42,
+      "missed_by_both_frac": "0.894",
+      "n_degenerate_loose_in_cell": 0,
+      "b3_note": ""
+    },
+    {
+      "arm": "b1",
+      "cut": "length_tercile",
+      "level": "T1 [1-12 ws-tokens]",
+      "n_breach": 31,
+      "lg_missed": 28,
+      "lg_missed_frac": "0.903",
+      "bd_missed": 29,
+      "bd_missed_frac": "0.935",
+      "missed_by_both": 26,
+      "missed_by_both_frac": "0.839",
+      "n_degenerate_loose_in_cell": 0,
+      "b3_note": ""
+    },
+    {
+      "arm": "b1",
+      "cut": "length_tercile",
+      "level": "T2 [13-25 ws-tokens]",
+      "n_breach": 31,
+      "lg_missed": 28,
+      "lg_missed_frac": "0.903",
+      "bd_missed": 31,
+      "bd_missed_frac": "1.000",
+      "missed_by_both": 28,
+      "missed_by_both_frac": "0.903",
+      "n_degenerate_loose_in_cell": 0,
+      "b3_note": ""
+    },
+    {
+      "arm": "b1",
+      "cut": "length_tercile",
+      "level": "T3 [25-465 ws-tokens]",
+      "n_breach": 30,
+      "lg_missed": 23,
+      "lg_missed_frac": "0.767",
+      "bd_missed": 28,
+      "bd_missed_frac": "0.933",
+      "missed_by_both": 23,
+      "missed_by_both_frac": "0.767",
+      "n_degenerate_loose_in_cell": 7,
+      "b3_note": ""
+    },
+    {
+      "arm": "b1",
+      "cut": "degeneracy_loose",
+      "level": "degenerate_loose",
+      "n_breach": 7,
+      "lg_missed": 5,
+      "lg_missed_frac": "",
+      "bd_missed": 7,
+      "bd_missed_frac": "",
+      "missed_by_both": 5,
+      "missed_by_both_frac": "",
+      "n_degenerate_loose_in_cell": 7,
+      "b3_note": ""
+    },
+    {
+      "arm": "b1",
+      "cut": "degeneracy_loose",
+      "level": "non_degenerate",
+      "n_breach": 85,
+      "lg_missed": 74,
+      "lg_missed_frac": "0.871",
+      "bd_missed": 81,
+      "bd_missed_frac": "0.953",
+      "missed_by_both": 72,
+      "missed_by_both_frac": "0.847",
+      "n_degenerate_loose_in_cell": 0,
+      "b3_note": ""
+    },
+    {
+      "arm": "b1",
+      "cut": "attack_category",
+      "level": "prefilling",
+      "n_breach": 43,
+      "lg_missed": 34,
+      "lg_missed_frac": "0.791",
+      "bd_missed": 41,
+      "bd_missed_frac": "0.953",
+      "missed_by_both": 34,
+      "missed_by_both_frac": "0.791",
+      "n_degenerate_loose_in_cell": 5,
+      "b3_note": ""
+    },
+    {
+      "arm": "b1",
+      "cut": "attack_category",
+      "level": "persona",
+      "n_breach": 19,
+      "lg_missed": 19,
+      "lg_missed_frac": "1.000",
+      "bd_missed": 19,
+      "bd_missed_frac": "1.000",
+      "missed_by_both": 19,
+      "missed_by_both_frac": "1.000",
+      "n_degenerate_loose_in_cell": 1,
+      "b3_note": ""
+    },
+    {
+      "arm": "b1",
+      "cut": "attack_category",
+      "level": "many_shot",
+      "n_breach": 30,
+      "lg_missed": 26,
+      "lg_missed_frac": "0.867",
+      "bd_missed": 28,
+      "bd_missed_frac": "0.933",
+      "missed_by_both": 24,
+      "missed_by_both_frac": "0.800",
+      "n_degenerate_loose_in_cell": 1,
+      "b3_note": ""
+    },
+    {
+      "arm": "b1",
+      "cut": "overall",
+      "level": "overall_primary",
+      "n_breach": 92,
+      "lg_missed": 79,
+      "lg_missed_frac": "0.859",
+      "bd_missed": 88,
+      "bd_missed_frac": "0.957",
+      "missed_by_both": 77,
+      "missed_by_both_frac": "0.837",
+      "n_degenerate_loose_in_cell": 7,
+      "b3_note": ""
+    },
+    {
+      "arm": "b2",
+      "cut": "length_tercile",
+      "level": "T1 [1-28 ws-tokens]",
+      "n_breach": 28,
+      "lg_missed": 28,
+      "lg_missed_frac": "1.000",
+      "bd_missed": 28,
+      "bd_missed_frac": "1.000",
+      "missed_by_both": 28,
+      "missed_by_both_frac": "1.000",
+      "n_degenerate_loose_in_cell": 0,
+      "b3_note": ""
+    },
+    {
+      "arm": "b2",
+      "cut": "length_tercile",
+      "level": "T2 [29-52 ws-tokens]",
+      "n_breach": 28,
+      "lg_missed": 27,
+      "lg_missed_frac": "0.964",
+      "bd_missed": 27,
+      "bd_missed_frac": "0.964",
+      "missed_by_both": 26,
+      "missed_by_both_frac": "0.929",
+      "n_degenerate_loose_in_cell": 1,
+      "b3_note": ""
+    },
+    {
+      "arm": "b2",
+      "cut": "length_tercile",
+      "level": "T3 [52-440 ws-tokens]",
+      "n_breach": 27,
+      "lg_missed": 26,
+      "lg_missed_frac": "0.963",
+      "bd_missed": 26,
+      "bd_missed_frac": "0.963",
+      "missed_by_both": 25,
+      "missed_by_both_frac": "0.926",
+      "n_degenerate_loose_in_cell": 5,
+      "b3_note": ""
+    },
+    {
+      "arm": "b2",
+      "cut": "degeneracy_loose",
+      "level": "degenerate_loose",
+      "n_breach": 6,
+      "lg_missed": 6,
+      "lg_missed_frac": "",
+      "bd_missed": 6,
+      "bd_missed_frac": "",
+      "missed_by_both": 6,
+      "missed_by_both_frac": "",
+      "n_degenerate_loose_in_cell": 6,
+      "b3_note": ""
+    },
+    {
+      "arm": "b2",
+      "cut": "degeneracy_loose",
+      "level": "non_degenerate",
+      "n_breach": 77,
+      "lg_missed": 75,
+      "lg_missed_frac": "0.974",
+      "bd_missed": 75,
+      "bd_missed_frac": "0.974",
+      "missed_by_both": 73,
+      "missed_by_both_frac": "0.948",
+      "n_degenerate_loose_in_cell": 0,
+      "b3_note": ""
+    },
+    {
+      "arm": "b2",
+      "cut": "attack_category",
+      "level": "prefilling",
+      "n_breach": 39,
+      "lg_missed": 37,
+      "lg_missed_frac": "0.949",
+      "bd_missed": 37,
+      "bd_missed_frac": "0.949",
+      "missed_by_both": 35,
+      "missed_by_both_frac": "0.897",
+      "n_degenerate_loose_in_cell": 2,
+      "b3_note": ""
+    },
+    {
+      "arm": "b2",
+      "cut": "attack_category",
+      "level": "persona",
+      "n_breach": 11,
+      "lg_missed": 11,
+      "lg_missed_frac": "1.000",
+      "bd_missed": 11,
+      "bd_missed_frac": "1.000",
+      "missed_by_both": 11,
+      "missed_by_both_frac": "1.000",
+      "n_degenerate_loose_in_cell": 0,
+      "b3_note": ""
+    },
+    {
+      "arm": "b2",
+      "cut": "attack_category",
+      "level": "many_shot",
+      "n_breach": 33,
+      "lg_missed": 33,
+      "lg_missed_frac": "1.000",
+      "bd_missed": 33,
+      "bd_missed_frac": "1.000",
+      "missed_by_both": 33,
+      "missed_by_both_frac": "1.000",
+      "n_degenerate_loose_in_cell": 4,
+      "b3_note": ""
+    },
+    {
+      "arm": "b2",
+      "cut": "overall",
+      "level": "overall_primary",
+      "n_breach": 83,
+      "lg_missed": 81,
+      "lg_missed_frac": "0.976",
+      "bd_missed": 81,
+      "bd_missed_frac": "0.976",
+      "missed_by_both": 79,
+      "missed_by_both_frac": "0.952",
+      "n_degenerate_loose_in_cell": 6,
+      "b3_note": ""
+    },
+    {
+      "arm": "b3",
+      "cut": "length_tercile",
+      "level": "T1 [1-27 ws-tokens]",
+      "n_breach": 27,
+      "lg_missed": "",
+      "lg_missed_frac": "",
+      "bd_missed": 27,
+      "bd_missed_frac": "1.000",
+      "missed_by_both": "",
+      "missed_by_both_frac": "",
+      "n_degenerate_loose_in_cell": 0,
+      "b3_note": "excluded from LG-miss/missed-by-both (near-tautology: filter IS LG)"
+    },
+    {
+      "arm": "b3",
+      "cut": "length_tercile",
+      "level": "T2 [28-51 ws-tokens]",
+      "n_breach": 27,
+      "lg_missed": "",
+      "lg_missed_frac": "",
+      "bd_missed": 26,
+      "bd_missed_frac": "0.963",
+      "missed_by_both": "",
+      "missed_by_both_frac": "",
+      "n_degenerate_loose_in_cell": 1,
+      "b3_note": "excluded from LG-miss/missed-by-both (near-tautology: filter IS LG)"
+    },
+    {
+      "arm": "b3",
+      "cut": "length_tercile",
+      "level": "T3 [52-440 ws-tokens]",
+      "n_breach": 27,
+      "lg_missed": "",
+      "lg_missed_frac": "",
+      "bd_missed": 26,
+      "bd_missed_frac": "0.963",
+      "missed_by_both": "",
+      "missed_by_both_frac": "",
+      "n_degenerate_loose_in_cell": 5,
+      "b3_note": "excluded from LG-miss/missed-by-both (near-tautology: filter IS LG)"
+    },
+    {
+      "arm": "b3",
+      "cut": "degeneracy_loose",
+      "level": "degenerate_loose",
+      "n_breach": 6,
+      "lg_missed": "",
+      "lg_missed_frac": "",
+      "bd_missed": 6,
+      "bd_missed_frac": "",
+      "missed_by_both": "",
+      "missed_by_both_frac": "",
+      "n_degenerate_loose_in_cell": 6,
+      "b3_note": "excluded from LG-miss/missed-by-both (near-tautology: filter IS LG)"
+    },
+    {
+      "arm": "b3",
+      "cut": "degeneracy_loose",
+      "level": "non_degenerate",
+      "n_breach": 75,
+      "lg_missed": "",
+      "lg_missed_frac": "",
+      "bd_missed": 73,
+      "bd_missed_frac": "0.973",
+      "missed_by_both": "",
+      "missed_by_both_frac": "",
+      "n_degenerate_loose_in_cell": 0,
+      "b3_note": "excluded from LG-miss/missed-by-both (near-tautology: filter IS LG)"
+    },
+    {
+      "arm": "b3",
+      "cut": "attack_category",
+      "level": "prefilling",
+      "n_breach": 37,
+      "lg_missed": "",
+      "lg_missed_frac": "",
+      "bd_missed": 35,
+      "bd_missed_frac": "0.946",
+      "missed_by_both": "",
+      "missed_by_both_frac": "",
+      "n_degenerate_loose_in_cell": 2,
+      "b3_note": "excluded from LG-miss/missed-by-both (near-tautology: filter IS LG)"
+    },
+    {
+      "arm": "b3",
+      "cut": "attack_category",
+      "level": "persona",
+      "n_breach": 11,
+      "lg_missed": "",
+      "lg_missed_frac": "",
+      "bd_missed": 11,
+      "bd_missed_frac": "1.000",
+      "missed_by_both": "",
+      "missed_by_both_frac": "",
+      "n_degenerate_loose_in_cell": 0,
+      "b3_note": "excluded from LG-miss/missed-by-both (near-tautology: filter IS LG)"
+    },
+    {
+      "arm": "b3",
+      "cut": "attack_category",
+      "level": "many_shot",
+      "n_breach": 33,
+      "lg_missed": "",
+      "lg_missed_frac": "",
+      "bd_missed": 33,
+      "bd_missed_frac": "1.000",
+      "missed_by_both": "",
+      "missed_by_both_frac": "",
+      "n_degenerate_loose_in_cell": 4,
+      "b3_note": "excluded from LG-miss/missed-by-both (near-tautology: filter IS LG)"
+    },
+    {
+      "arm": "b3",
+      "cut": "overall",
+      "level": "overall_primary",
+      "n_breach": 81,
+      "lg_missed": "",
+      "lg_missed_frac": "",
+      "bd_missed": 79,
+      "bd_missed_frac": "0.975",
+      "missed_by_both": "",
+      "missed_by_both_frac": "",
+      "n_degenerate_loose_in_cell": 6,
+      "b3_note": "excluded from LG-miss/missed-by-both (near-tautology: filter IS LG)"
+    },
+    {
+      "arm": "t",
+      "cut": "length_tercile",
+      "level": "T1 [1-26 ws-tokens]",
+      "n_breach": 24,
+      "lg_missed": 23,
+      "lg_missed_frac": "0.958",
+      "bd_missed": 24,
+      "bd_missed_frac": "1.000",
+      "missed_by_both": 23,
+      "missed_by_both_frac": "0.958",
+      "n_degenerate_loose_in_cell": 0,
+      "b3_note": ""
+    },
+    {
+      "arm": "t",
+      "cut": "length_tercile",
+      "level": "T2 [27-49 ws-tokens]",
+      "n_breach": 24,
+      "lg_missed": 23,
+      "lg_missed_frac": "0.958",
+      "bd_missed": 24,
+      "bd_missed_frac": "1.000",
+      "missed_by_both": 23,
+      "missed_by_both_frac": "0.958",
+      "n_degenerate_loose_in_cell": 0,
+      "b3_note": ""
+    },
+    {
+      "arm": "t",
+      "cut": "length_tercile",
+      "level": "T3 [49-109 ws-tokens]",
+      "n_breach": 23,
+      "lg_missed": 22,
+      "lg_missed_frac": "0.957",
+      "bd_missed": 23,
+      "bd_missed_frac": "1.000",
+      "missed_by_both": 22,
+      "missed_by_both_frac": "0.957",
+      "n_degenerate_loose_in_cell": 0,
+      "b3_note": ""
+    },
+    {
+      "arm": "t",
+      "cut": "degeneracy_loose",
+      "level": "degenerate_loose",
+      "n_breach": 0,
+      "lg_missed": 0,
+      "lg_missed_frac": "",
+      "bd_missed": 0,
+      "bd_missed_frac": "",
+      "missed_by_both": 0,
+      "missed_by_both_frac": "",
+      "n_degenerate_loose_in_cell": 0,
+      "b3_note": ""
+    },
+    {
+      "arm": "t",
+      "cut": "degeneracy_loose",
+      "level": "non_degenerate",
+      "n_breach": 71,
+      "lg_missed": 68,
+      "lg_missed_frac": "0.958",
+      "bd_missed": 71,
+      "bd_missed_frac": "1.000",
+      "missed_by_both": 68,
+      "missed_by_both_frac": "0.958",
+      "n_degenerate_loose_in_cell": 0,
+      "b3_note": ""
+    },
+    {
+      "arm": "t",
+      "cut": "attack_category",
+      "level": "prefilling",
+      "n_breach": 34,
+      "lg_missed": 32,
+      "lg_missed_frac": "0.941",
+      "bd_missed": 34,
+      "bd_missed_frac": "1.000",
+      "missed_by_both": 32,
+      "missed_by_both_frac": "0.941",
+      "n_degenerate_loose_in_cell": 0,
+      "b3_note": ""
+    },
+    {
+      "arm": "t",
+      "cut": "attack_category",
+      "level": "persona",
+      "n_breach": 12,
+      "lg_missed": 12,
+      "lg_missed_frac": "1.000",
+      "bd_missed": 12,
+      "bd_missed_frac": "1.000",
+      "missed_by_both": 12,
+      "missed_by_both_frac": "1.000",
+      "n_degenerate_loose_in_cell": 0,
+      "b3_note": ""
+    },
+    {
+      "arm": "t",
+      "cut": "attack_category",
+      "level": "many_shot",
+      "n_breach": 25,
+      "lg_missed": 24,
+      "lg_missed_frac": "0.960",
+      "bd_missed": 25,
+      "bd_missed_frac": "1.000",
+      "missed_by_both": 24,
+      "missed_by_both_frac": "0.960",
+      "n_degenerate_loose_in_cell": 0,
+      "b3_note": ""
+    },
+    {
+      "arm": "t",
+      "cut": "overall",
+      "level": "overall_primary",
+      "n_breach": 71,
+      "lg_missed": 68,
+      "lg_missed_frac": "0.958",
+      "bd_missed": 71,
+      "bd_missed_frac": "1.000",
+      "missed_by_both": 68,
+      "missed_by_both_frac": "0.958",
+      "n_degenerate_loose_in_cell": 0,
+      "b3_note": ""
+    }
+  ],
+  "provenance": {
+    "script": "C:\\proj71\\results\\exploratory\\analysis4_classifier_blindness_mechanism\\analyze_mechanism.py",
+    "seed": 0,
+    "seed_note": "provenance only; analysis is deterministic",
+    "inputs": {
+      "scored_b0": {
+        "path": "C:\\proj71\\results\\b0_seed42\\scored_realsuite.jsonl",
+        "sha256": "106920f15e5822d423645a57e8019b5971d000d6b61d166fe580cdb1b7e9b781"
+      },
+      "scored_b1": {
+        "path": "C:\\proj71\\results\\b1_seed42\\scored_realsuite.jsonl",
+        "sha256": "b7c91b9a1c7cf72262a904cde02d03cf406d05d8fc923ae8f345326fcc2654f5"
+      },
+      "scored_b2": {
+        "path": "C:\\proj71\\results\\b2_seed42\\scored.jsonl",
+        "sha256": "f323bbb3295eea8c09ddcf422cf39472fac6777e906035c1eacebaeeee68c087"
+      },
+      "scored_b3": {
+        "path": "C:\\proj71\\results\\b3_seed42\\scored.jsonl",
+        "sha256": "0a60e577ffed94f44d567088897e77f075cc4240dff73199f22c4fe1e762aa3a"
+      },
+      "scored_t": {
+        "path": "C:\\proj71\\results\\t_seed42\\scored.jsonl",
+        "sha256": "3bfddeb7114c4620a9b0f26698deb03c5576d5e5d7fddce0ba2f8f33bf1993fd"
+      },
+      "generations_b0": {
+        "path": "C:\\proj71\\results\\b0_seed42\\generations_realsuite_SUPERSEDED_pre_b1v2_regen.jsonl",
+        "sha256": "7e2479150952c0be19a7a33b61c5124a2ee9ae7b9a22d37b0495cafa4284f60c"
+      },
+      "generations_b1": {
+        "path": "C:\\proj71\\results\\b1_seed42\\generations_realsuite.jsonl",
+        "sha256": "2acebcd26da6d9bf4a576ed33ff284ff677f83e2cca53f34c261cd4aef640cd4"
+      },
+      "generations_b2": {
+        "path": "C:\\proj71\\results\\b2_seed42\\generations.jsonl",
+        "sha256": "eb3277b41ce46023cfc2205b6132ede44517fd2965162fc2a9eba7c2a8073a10"
+      },
+      "generations_b3": {
+        "path": "C:\\proj71\\results\\b3_seed42\\generations.jsonl",
+        "sha256": "43362ff868398c966a155648ba3148ad36bb14f74816a7dc39ee0eda9e2ab73a"
+      },
+      "generations_t": {
+        "path": "C:\\proj71\\results\\t_seed42\\generations.jsonl",
+        "sha256": "65bd6053fa089ffc7b8248163d2ca22f1dbe92910ea7138530d715a79b5185d3"
+      },
+      "raw_scores_b0_llamaguard": {
+        "path": "C:\\proj71\\results\\judge_probes\\classifier_blindness_fullsuite_20260827\\raw_scores_b0_llamaguard.jsonl",
+        "sha256": "4e2a8d5e19db605171830e7df4774f302fee79ae6b4cd5c50adab74a40178c8c"
+      },
+      "raw_scores_b0_beaverdam": {
+        "path": "C:\\proj71\\results\\judge_probes\\classifier_blindness_fullsuite_20260827\\raw_scores_b0_beaverdam.jsonl",
+        "sha256": "f73a8471b19ad4a4a431cf051e481a0248b62a6b8f8c96feb152957bd29a9ecf"
+      },
+      "raw_scores_b1_llamaguard": {
+        "path": "C:\\proj71\\results\\judge_probes\\classifier_blindness_fullsuite_20260827\\raw_scores_b1_llamaguard.jsonl",
+        "sha256": "adc76ebc2887c1ab08eac94d0fd5712831e8150cb19716407c79053f0be2efba"
+      },
+      "raw_scores_b1_beaverdam": {
+        "path": "C:\\proj71\\results\\judge_probes\\classifier_blindness_fullsuite_20260827\\raw_scores_b1_beaverdam.jsonl",
+        "sha256": "19e7538aed94758a2e814e2ebe5e1d7fcba79adf6ad4c70c8db148a452f3479c"
+      },
+      "raw_scores_b2_llamaguard": {
+        "path": "C:\\proj71\\results\\judge_probes\\classifier_blindness_fullsuite_20260827\\raw_scores_b2_llamaguard.jsonl",
+        "sha256": "0620e5f27f6b592646d3e42ed6ecd82f538d0fcc5207377a6aef4259cd32ce73"
+      },
+      "raw_scores_b2_beaverdam": {
+        "path": "C:\\proj71\\results\\judge_probes\\classifier_blindness_fullsuite_20260827\\raw_scores_b2_beaverdam.jsonl",
+        "sha256": "ed4c2ed7eb76bf2229e1d5c17bf06aaf6cfbf881daa4d1e4b4d65c19ccebafdb"
+      },
+      "raw_scores_b3_llamaguard": {
+        "path": "C:\\proj71\\results\\judge_probes\\classifier_blindness_fullsuite_20260827\\raw_scores_b3_llamaguard.jsonl",
+        "sha256": "bbbb9b25352fbad4b877da927ba3156b39acec3aee18f6f97445c0ed1f2c2db9"
+      },
+      "raw_scores_b3_beaverdam": {
+        "path": "C:\\proj71\\results\\judge_probes\\classifier_blindness_fullsuite_20260827\\raw_scores_b3_beaverdam.jsonl",
+        "sha256": "90370ba65678603b3f9b9cbd98dd84e6b0e872d7c89911d0ba9f0904be06f1ab"
+      },
+      "raw_scores_t_llamaguard": {
+        "path": "C:\\proj71\\results\\judge_probes\\classifier_blindness_fullsuite_20260827\\raw_scores_t_llamaguard.jsonl",
+        "sha256": "d25df4e0b583c5564c210dd5b01914b6ca89b85a3b6883040e6bc0bd63b62b2a"
+      },
+      "raw_scores_t_beaverdam": {
+        "path": "C:\\proj71\\results\\judge_probes\\classifier_blindness_fullsuite_20260827\\raw_scores_t_beaverdam.jsonl",
+        "sha256": "81efe19b930dfbab8eb91f9f340beb59554b84c713fe07fa068ae57d0b32cfa1"
+      }
+    }
+  }
+}

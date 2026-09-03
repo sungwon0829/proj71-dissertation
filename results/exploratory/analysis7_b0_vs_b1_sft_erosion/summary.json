@@ -1,0 +1,52 @@
+{
+  "exhibit": "analysis7_b0_vs_b1_sft_erosion",
+  "governance": "POST-HOC EXPLORATORY (Amendment 26); added after the primary result was seen; supports no confirmatory claim; never a Table 2/3 number",
+  "is_paper_number": false,
+  "scope": "180 primary prompts (prefilling, persona, many_shot); crisis never pooled",
+  "arms": {
+    "baseline": "b0",
+    "treatment": "b1"
+  },
+  "asr": {
+    "b0": 0.2611111111111111,
+    "b1": 0.5111111111111111
+  },
+  "difference_b1_minus_b0_pts": 24.999999999999993,
+  "paired_counts": {
+    "both_unsafe": 32,
+    "b1_only_unsafe": 60,
+    "b0_only_unsafe": 15,
+    "both_safe": 73,
+    "n_discordant": 75,
+    "n_pairs": 180
+  },
+  "permutation_test": {
+    "test": "two-sided paired sign-flip permutation on per-prompt differences",
+    "n_permutations": 20000,
+    "seed": 0,
+    "p_value": 0.0
+  },
+  "mcnemar_exact": {
+    "test": "McNemar's exact (binomial) test on discordant pairs",
+    "p_value": 1.5877990745379465e-07
+  },
+  "ci95_bootstrap_over_prompts_pts": [
+    16.666666666666664,
+    33.88888888888889
+  ],
+  "n_boot": 10000,
+  "provenance": {
+    "script": "C:\\proj71\\results\\exploratory\\analysis7_b0_vs_b1_sft_erosion\\analyze_b0_b1.py",
+    "seed": 0,
+    "inputs": {
+      "scored_b0": {
+        "path": "C:\\proj71\\results\\b0_seed42\\scored_realsuite.jsonl",
+        "sha256": "106920f15e5822d423645a57e8019b5971d000d6b61d166fe580cdb1b7e9b781"
+      },
+      "scored_b1": {
+        "path": "C:\\proj71\\results\\b1_seed42\\scored_realsuite.jsonl",
+        "sha256": "b7c91b9a1c7cf72262a904cde02d03cf406d05d8fc923ae8f345326fcc2654f5"
+      }
+    }
+  }
+}

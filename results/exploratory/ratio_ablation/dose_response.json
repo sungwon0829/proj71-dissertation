@@ -1,0 +1,153 @@
+{
+  "record_type": "ratio_ablation_dose_response",
+  "amendment": "24.2 (post-hoc exploratory, sighted; pre-specified output)",
+  "timestamp": "2026-08-28T18:07:06+00:00",
+  "script": "scripts/make_ratio_ablation_exhibit.py",
+  "bootstrap": {
+    "n_boot": 10000,
+    "seed": 0,
+    "method": "stats.bootstrap_paired + stats.pct_ci, identical to tables_final"
+  },
+  "suite_sha256": "e14c3a24184d01cbf31bbcfa42be03104ae07b0bea1132bc5b08a177645b6689",
+  "replication_check_t_r200": {
+    "adapter_sha256": "2db6dbdf5c078a6d7b421be65e9b081ec08d1347c9096f47526ea87286b91697",
+    "adapter_matches_t": true,
+    "manifest_fields_differing_from_t": [
+      "arm",
+      "cli_invocation",
+      "config"
+    ],
+    "outcome_vectors_identical_to_t": true,
+    "training_determinism_note": "Same config totals + same seed reproduced T's adapter BIT-FOR-BIT (sha256 equal): LoRA DPO training on this stack (Windows Server 2025, Blackwell, PyTorch 2.11 sdpa) is bitwise deterministic given identical data and seed. Incidental but paper-worthy reproducibility evidence."
+  },
+  "points_ordered_by_ratio": [
+    {
+      "arm": "b2",
+      "achieved_ratio": 0.0,
+      "role": "0% safety pairs (helpfulness-only DPO)",
+      "n_safety_pairs": 0,
+      "asr_primary": {
+        "value": 0.46111111111111114,
+        "ci95_bootstrap_over_prompts": [
+          0.3888888888888889,
+          0.5333333333333333
+        ],
+        "n_prompts": 180,
+        "source": "tables_final_verbatim"
+      },
+      "crisis_co_primary": {
+        "value": 0.36666666666666664,
+        "ci95_bootstrap_over_prompts": [
+          0.25,
+          0.48333333333333334
+        ],
+        "n_prompts": 60,
+        "source": "computed_here_same_method"
+      }
+    },
+    {
+      "arm": "t_r050",
+      "achieved_ratio": 0.5,
+      "role": "50% of T's safety pairs",
+      "n_safety_pairs": 2462,
+      "asr_primary": {
+        "value": 0.45,
+        "ci95_bootstrap_over_prompts": [
+          0.37777777777777777,
+          0.5222222222222223
+        ],
+        "n_prompts": 180,
+        "source": "computed_here_same_method"
+      },
+      "crisis_co_primary": {
+        "value": 0.3,
+        "ci95_bootstrap_over_prompts": [
+          0.18333333333333332,
+          0.4166666666666667
+        ],
+        "n_prompts": 60,
+        "source": "computed_here_same_method"
+      }
+    },
+    {
+      "arm": "t",
+      "achieved_ratio": 1.0,
+      "role": "100% -- the pre-registered T arm",
+      "n_safety_pairs": 4924,
+      "asr_primary": {
+        "value": 0.39444444444444443,
+        "ci95_bootstrap_over_prompts": [
+          0.32222222222222224,
+          0.4666666666666667
+        ],
+        "n_prompts": 180,
+        "source": "tables_final_verbatim"
+      },
+      "crisis_co_primary": {
+        "value": 0.3,
+        "ci95_bootstrap_over_prompts": [
+          0.18333333333333332,
+          0.4166666666666667
+        ],
+        "n_prompts": 60,
+        "source": "tables_final_verbatim"
+      }
+    },
+    {
+      "arm": "t_r200",
+      "achieved_ratio": 1.0,
+      "role": "requested 200%; ACHIEVED 100% (pool contingency) -- exact replication of T",
+      "n_safety_pairs": 4924,
+      "asr_primary": {
+        "value": 0.39444444444444443,
+        "ci95_bootstrap_over_prompts": [
+          0.32222222222222224,
+          0.4666666666666667
+        ],
+        "n_prompts": 180,
+        "source": "computed_here_same_method"
+      },
+      "crisis_co_primary": {
+        "value": 0.3,
+        "ci95_bootstrap_over_prompts": [
+          0.18333333333333332,
+          0.4166666666666667
+        ],
+        "n_prompts": 60,
+        "source": "computed_here_same_method"
+      }
+    }
+  ],
+  "monotonicity": {
+    "ratios": [
+      0.0,
+      0.5,
+      1.0
+    ],
+    "asr_primary_values": [
+      0.46111111111111114,
+      0.45,
+      0.39444444444444443
+    ],
+    "asr_primary_pattern": "strictly monotone decreasing",
+    "crisis_values": [
+      0.36666666666666664,
+      0.3,
+      0.3
+    ],
+    "crisis_pattern": "monotone non-increasing (with ties)",
+    "note": "Assessed over the three distinct achieved ratios (0, 0.5, 1.0); t_r200 replicates the 1.0 point exactly (bit-identical adapter) and is not an independent ratio. Three points cannot establish a dose-response curve; the pattern statement is descriptive (Amendment 24.2), with no trend test and no reframing of the primary null."
+  },
+  "scored_files": {
+    "b2": "results/b2_seed42/scored.jsonl",
+    "t": "results/t_seed42/scored.jsonl",
+    "t_r050": "results/t_r050_seed42/scored_realsuite.jsonl",
+    "t_r200": "results/t_r200_seed42/scored_realsuite.jsonl"
+  },
+  "scored_sha256": {
+    "b2": "f323bbb3295eea8c09ddcf422cf39472fac6777e906035c1eacebaeeee68c087",
+    "t": "3bfddeb7114c4620a9b0f26698deb03c5576d5e5d7fddce0ba2f8f33bf1993fd",
+    "t_r050": "d823dfc4a4fa003c5960e9e5cca465e5669f5b3e4849e5a295ecd3734cfa75fb",
+    "t_r200": "f8f6a8108f6bc8f28556647923b721a219215178f67b7ed6ce45d9c8b27d400c"
+  }
+}

@@ -1,0 +1,57 @@
+{
+  "analysis": "Amendment 24.1 analysis 3 -- retrospective MDE (POST-HOC EXPLORATORY)",
+  "status": "post-hoc exploratory (Amendment 24.1); never confirmatory; never Table 1/2; never the headline sentence",
+  "date": "2026-08-28",
+  "inputs": {
+    "b3": "C:\\proj71\\results\\b3_seed42\\scored.jsonl",
+    "t": "C:\\proj71\\results\\t_seed42\\scored.jsonl",
+    "endpoint": "primary (prefilling, persona, many_shot); crisis excluded, never pooled (Amendment 13)"
+  },
+  "observed_structure_verified": {
+    "n_pairs": 180,
+    "b3_unsafe": 81,
+    "b3_asr_pct": 45.0,
+    "t_unsafe": 71,
+    "t_asr_pct": 39.44,
+    "both_unsafe": 48,
+    "both_safe": 76,
+    "t_only_unsafe_b": 23,
+    "b3_only_unsafe_c": 33,
+    "n_discordant": 56,
+    "discordant_rate": 0.3111,
+    "observed_delta_pts": -5.56,
+    "observed_exact_mcnemar_p": 0.2288
+  },
+  "test": {
+    "name": "McNemar's exact test (two-sided), conditional binomial over discordant pairs; p = min(1, 2*min(P(X<=c), P(X>=c))), X ~ Binomial(n_d, 1/2)",
+    "alpha": 0.05,
+    "rejection_region_c": {
+      "c_le": 20,
+      "c_ge": 36
+    },
+    "attained_size": 0.044
+  },
+  "method": {
+    "power": "exact enumeration of Binomial(n_d=56, p) over the rejection region; discordant rate held at observed 56/180; raw marginal difference delta maps to split p = 1/2 + delta*n/(2*n_d)",
+    "mde": "bisection to smallest delta with power >= 0.80 (tol 1e-4 pts); deterministic (no RNG in the primary method)",
+    "cross_check": "unconditional simulation, n_d ~ Bin(180, 56/180), n_sim=100000, seed=0",
+    "scale": "raw observed scale (Amendment 22.3: attenuation correction NOT APPLIED)",
+    "arithmetic_ceiling_pts": 31.11
+  },
+  "results": {
+    "mde_pts_80pct_power": 11.56,
+    "discordant_split_at_mde": 0.6858,
+    "power_at_prereg_10pts": 0.6683,
+    "power_at_observed_5.56pts": 0.2505,
+    "prereg_threshold_pts": 10.0,
+    "design_detects_10pt_at_80pct_power": false
+  },
+  "cross_check_unconditional_sim": {
+    "seed": 0,
+    "n_sim": 100000,
+    "power_at_mde": 0.7688,
+    "power_at_prereg_10pts": 0.635,
+    "power_at_observed_5.56pts": 0.2274
+  },
+  "small_cell_rule": "any denominator < 10 gets counts only, no percentage; all denominators here (56, 180) are >= 10"
+}

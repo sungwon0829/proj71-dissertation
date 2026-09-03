@@ -13,10 +13,6 @@
 \usepackage{amssymb}
 \usepackage{float}
 
-% Drafting macro. grep -n "TODO" main.tex must be empty before submission.
-% Every number in this draft is listed in NUMBERS_LEDGER.md with its source.
-\newcommand{\TODO}[1]{\textcolor{red}{[TODO: #1]}}
-
 % Arm names, so they render identically everywhere.
 \newcommand{\Bz}{B0}
 \newcommand{\Bo}{B1}
@@ -158,14 +154,14 @@ where $y_w$ and $y_l$ are the chosen and rejected completions and $\pi_{\mathrm{
 
 
 
-\lead{Reproducibility and audit trail.} All reported numbers come from a results manifest. The manifest lists 38 exhibits from 18 source files, records the SHA-256 hash of each file and the value of each exhibit, and was verified with 74 hash checks and 169 value checks before the results were locked (Amendment 25). Every judge, filter and scorer is pinned by model revision and prompt hash in a lock file (v6, \texttt{a4a30d44}, Table~\ref{tab:pins}). A deterministic CPU script regenerated the final tables after reproducing the pinned stats report bit for bit on 26 checks, and a second script regenerated every result-table row in this paper from those files and checked it against the manuscript. Changing any number requires a dated amendment and a regenerated manifest. The pre-registration and its 26 amendments are in the repository. Each amendment is dated and states which results existed when it was written, and Appendix~\ref{app:amend} lists those that touch a reported number. Regenerating \Bo{} outputs gave byte-identical files. \Trtwo{}, trained from a manifest that differs from \T{}'s only in row labels, produced a bit-identical adapter (equal SHA-256) and 240/240 identical verdicts. One standing rule, that any automated safety count of zero triggers a hand-read before the number is recorded, overturned three automated summaries. The repository holds the code, configurations, judge prompts, attack suite, pre-registration, amendments, lock file and manifest, and is open to the examiners at \TODO{repository URL}.
+\lead{Reproducibility and audit trail.} All reported numbers come from a results manifest. The manifest lists 39 exhibits (one added post hoc under Amendment 26) from 18 source files, records the SHA-256 hash of each file and the value of each exhibit, and was verified with 74 hash checks and 169 value checks before the results were locked (Amendment 25). Every judge, filter and scorer is pinned by model revision and prompt hash in a lock file (v6, \texttt{a4a30d44}, Table~\ref{tab:pins}). A deterministic CPU script regenerated the final tables after reproducing the pinned stats report bit for bit on 26 checks, and a second script regenerated every result-table row in this paper from those files and checked it against the manuscript. Changing any number requires a dated amendment and a regenerated manifest. The pre-registration and its 26 amendments are in the repository. Each amendment is dated and states which results existed when it was written, and Appendix~\ref{app:amend} lists those that touch a reported number. Regenerating \Bo{} outputs gave byte-identical files. \Trtwo{}, trained from a manifest that differs from \T{}'s only in row labels, produced a bit-identical adapter (equal SHA-256) and 240/240 identical verdicts. One standing rule, that any automated safety count of zero triggers a hand-read before the number is recorded, overturned three automated summaries. The repository holds the code, configurations, judge prompts, attack suite, pre-registration, amendments, lock file, manifest and the derived result files it hashes, and is open to the examiners at \url{https://github.com/sungwon0829/proj71-dissertation}.
 
-\lead{Ethics and use of AI tools.} The study used public datasets and the author's own labels, and involved no participants. The author used Claude Code for implementation under the author's direction. All methodological decisions, the pre-registration and every amendment were the author's. The human validation labels were produced by the author personally. The audit trail of prompts, code and outputs is in the repository.
+\lead{Ethics and use of AI tools.} The study used public datasets and the author's own labels, and involved no participants. The author used Claude Code for implementation under the author's direction. All methodological decisions, the pre-registration and every amendment were the author's. The human validation labels were produced by the author personally.
 
-% ===========================================================================
+
 \section{Results}
 \label{sec:results}
-% ===========================================================================
+
 \subsection{Pre-registered endpoints}
 \label{sec:prereg}
 Table~\ref{tab:main} gives the attack-success rate, over-refusal and helpfulness of every arm. The base model \Bz{} has an ASR of 26.11\%. Supervised fine-tuning raises it to 51.11\% in \Bo{}, and \Bo{} also has the lowest helpfulness score, $-9.25$. \T{} has the lowest ASR of the trained arms at 39.44\%. \Bth{} is at 45.00\% and its unfiltered parent \Bt{} at 46.11\%. Over-refusal is 0/60 in \Bth{} and in \T{}. The rubric judge, a cross-check only, would have called 17, 17 and 15 of the 60 benign responses refusals in \Bt{}, \Bth{} and \T{}. Helpfulness of \Bth{} equals that of \Bt{}, 8.62, because the filter replaced none of the 120 scored responses. \T{} scores 6.49, 2.13 points below \Bth{} and 1.38 below the base model, and \Tctrl{} scores 6.45. For scale, helpfulness DPO raised the score from 7.87 in \Bz{} to 8.62 in \Bt{}, a gain of 0.75, and supervised fine-tuning alone had moved it from 7.87 to $-9.25$, a drop of 17.1.
@@ -407,7 +403,7 @@ Single-seed primary is representative & PARTIAL & measured post hoc: seed SD 2.5
 Labeller reliability & PARTIAL & single annotator, gold and intra-rater gates \\
 Reward-model loading & TESTED & 50/50 acceptance test with scope note \\
 Judge independence & TESTED & 15/15 assertions, including from a fresh clone \\
-Determinism and audit trail & TESTED & byte-identical regeneration of \Bo{} outputs, bit-identical \Trtwo{} adapter, 38-exhibit manifest \\
+Determinism and audit trail & TESTED & byte-identical regeneration of \Bo{} outputs, bit-identical \Trtwo{} adapter, 39-exhibit manifest \\
 \bottomrule
 \end{tabular}
 \end{center}
