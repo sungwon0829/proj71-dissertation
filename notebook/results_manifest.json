@@ -1,18 +1,15 @@
 {
   "record_type": "results_manifest",
   "schema_version": 1,
-  "generated": "2026-08-28T18:11:09+00:00",
+  "generated": "2026-09-03T12:04:15+00:00",
   "script": "scripts/make_results_manifest.py",
-  "git_head": "b08b8ca21005e69925087e1883e7a75be667be2e",
+  "git_head": "361fa2eec6a072f8f95703af61a305e85652b305",
   "git_branch": "main",
   "working_tree_dirty": [
-    "M .gitattributes",
-    " M configs/judges.yaml",
-    " M notebook/preregistration_amendments.md",
-    "?? configs/judges_pinned.lock.v6.json",
-    "?? scripts/issue_lock_v6.py"
+    "M notebook/results_manifest.json",
+    " M notebook/results_manifest.md"
   ],
-  "policy_note": "results/ artifacts are deliberately not version-controlled (CLAUDE.md repo rule); their integrity is fixed by the sha256 values recorded here. git_head identifies the exact code+config tree the artifacts were produced and verified under. Every value in `exhibits` was read live from the named artifact when this manifest was generated; regenerate and diff to audit.",
+  "policy_note": "results/ artifacts are deliberately not version-controlled (repository rule); their integrity is fixed by the sha256 values recorded here. git_head identifies the exact code+config tree the artifacts were produced and verified under. Every value in `exhibits` was read live from the named artifact when this manifest was generated; regenerate and diff to audit.",
   "pins": {
     "frozen_suite": {
       "path": "data/redteam/redteam_suite.jsonl",
@@ -33,7 +30,7 @@
     },
     "preregistration_amendments": {
       "path": "notebook/preregistration_amendments.md",
-      "sha256": "ca611e9bed8af42f471556746ae123d06dd1d2734c126619a3cb0ea50820b9f4"
+      "sha256": "442f52b2c329fc3cc162445149aa38234bfd487707e2dc90733c73c3ba3f781e"
     }
   },
   "sources": {
@@ -1095,7 +1092,7 @@
       "sources": [
         "primary_report"
       ],
-      "notes": "post-hoc exploratory (Amendment 24), decided after seeing the primary result; reported as such, never confirmatory"
+      "notes": "post-hoc exploratory (Amendment 24, or Amendment 26 for analysis7), decided after seeing the primary result; reported as such, never confirmatory"
     },
     {
       "id": "exploratory.analysis2_variance",
@@ -1112,7 +1109,7 @@
       "sources": [
         "primary_report"
       ],
-      "notes": "post-hoc exploratory (Amendment 24), decided after seeing the primary result; reported as such, never confirmatory"
+      "notes": "post-hoc exploratory (Amendment 24, or Amendment 26 for analysis7), decided after seeing the primary result; reported as such, never confirmatory"
     },
     {
       "id": "exploratory.analysis3_mde",
@@ -1128,7 +1125,7 @@
       "sources": [
         "primary_report"
       ],
-      "notes": "post-hoc exploratory (Amendment 24), decided after seeing the primary result; reported as such, never confirmatory"
+      "notes": "post-hoc exploratory (Amendment 24, or Amendment 26 for analysis7), decided after seeing the primary result; reported as such, never confirmatory"
     },
     {
       "id": "exploratory.analysis4_blindness_mechanism",
@@ -1147,7 +1144,7 @@
       "sources": [
         "primary_report"
       ],
-      "notes": "post-hoc exploratory (Amendment 24), decided after seeing the primary result; reported as such, never confirmatory"
+      "notes": "post-hoc exploratory (Amendment 24, or Amendment 26 for analysis7), decided after seeing the primary result; reported as such, never confirmatory"
     },
     {
       "id": "exploratory.analysis5_direction",
@@ -1163,7 +1160,7 @@
       "sources": [
         "primary_report"
       ],
-      "notes": "post-hoc exploratory (Amendment 24), decided after seeing the primary result; reported as such, never confirmatory"
+      "notes": "post-hoc exploratory (Amendment 24, or Amendment 26 for analysis7), decided after seeing the primary result; reported as such, never confirmatory"
     },
     {
       "id": "exploratory.ratio_ablation",
@@ -1178,7 +1175,24 @@
       "sources": [
         "primary_report"
       ],
-      "notes": "post-hoc exploratory (Amendment 24), decided after seeing the primary result; reported as such, never confirmatory"
+      "notes": "post-hoc exploratory (Amendment 24, or Amendment 26 for analysis7), decided after seeing the primary result; reported as such, never confirmatory"
+    },
+    {
+      "id": "exploratory.analysis7_b0_vs_b1",
+      "kind": "exploratory_table",
+      "status": "exploratory",
+      "value": {
+        "results/exploratory/analysis7_b0_vs_b1_sft_erosion/analyze_b0_b1.py": "a104dc293189c22eb95c767a54c6e50a55a87c0612ab26863bbd32c0d8668e67",
+        "results/exploratory/analysis7_b0_vs_b1_sft_erosion/report.md": "c4fee807fbfd90a6d621c6f63ec97283d6747e356e14d0015f8fa87f1d8871ea",
+        "results/exploratory/analysis7_b0_vs_b1_sft_erosion/summary.json": "075ba607b94a5c2fc5a17c32d6f7f62977a0da95066496b0947d27a97c25db96"
+      },
+      "artifact": "results/exploratory/analysis7_b0_vs_b1_sft_erosion/analyze_b0_b1.py",
+      "artifact_sha256": "a104dc293189c22eb95c767a54c6e50a55a87c0612ab26863bbd32c0d8668e67",
+      "sources": [
+        "scored_b0",
+        "scored_b1"
+      ],
+      "notes": "post-hoc exploratory (Amendment 24, or Amendment 26 for analysis7), decided after seeing the primary result; reported as such, never confirmatory"
     }
   ]
 }
